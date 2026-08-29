@@ -1,0 +1,9 @@
+# Rust build output
+target/
+
+# Logs
+*.log
+
+# Editor / OS junk
+.DS_Store
+Thumbs.db
