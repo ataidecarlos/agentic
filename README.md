@@ -1,31 +1,28 @@
 # opencode-plan-mode
 
-OMP-grade plan mode for Opencode: a distilled, harness-agnostic planning prompt plus an Opencode `plan` agent override that applies it. The agent produces decision-complete execution plans with the OMP five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no padding.
+Plan mode for Opencode: a distilled, harness-agnostic planning prompt plus an Opencode `plan` agent override that applies it. The agent produces decision-complete execution plans with the OMP five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no padding.
 
 ## What this is
 
 Two deliverables, one relationship:
 
-- `prompts/omp-plan-mode.md` — the canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona.
-- `agents/plan.md` — the Opencode `plan` agent override. Its body is `prompts/omp-plan-mode.md` **verbatim**, plus an Opencode appendix (plan-artifact path, read-only policy, Explore/Scout subagents).
+- `prompts/plan-mode.md` — the canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona.
+- `agents/plan.md` — the Opencode `plan` agent override. Its body is `prompts/plan-mode.md` **verbatim**.
 
-The invariant: **the agent body is the prompt verbatim, plus the Opencode appendix.** When the prompt changes, re-sync the agent body (see "Keeping prompt and agent in sync").
+The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body (see "Keeping prompt and agent in sync").
 
 ## How plan mode works
 
 A planning agent produces exactly one deliverable: a written execution plan an engineer who has not seen the conversation can follow top-to-bottom without making a single design decision. Every plan contains exactly five sections, in order — `## Context`, `## Approach`, `## Critical files & anchors`, `## Verification`, `## Assumptions & contingencies` — and nothing else. The prompt enforces the concrete-edit rule (every step names a verb, an exact target, and the new behavior), grounding-by-discovery (reads, globs, greps, and parallel research subagents — never guesses stated as settled), and hard exclusions (no Non-Goals/Alternatives/Risks/Future-Work sections, no mechanical cleanup tail, no references to the planning conversation itself).
 
-The full canonical text is `prompts/omp-plan-mode.md`; it is not duplicated here.
+The full canonical text is `prompts/plan-mode.md`; it is not duplicated here.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `prompts/omp-plan-mode.md` | Canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona. |
-| `agents/plan.md` | Opencode `plan` agent override. Body is `prompts/omp-plan-mode.md` verbatim plus an Opencode appendix (plan artifact path, read-only policy, Explore/Scout subagents). |
-| `benchmark/` | 4-target benchmark validating the override reproduces OMP-grade plans (targets, rubric, run procedure, results, findings). |
-
-`benchmark/` is optional — it is only needed to compare against OMP plan mode. Installation and use do not require it.
+| `prompts/plan-mode.md` | Canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona. |
+| `agents/plan.md` | Opencode `plan` agent override. Body is `prompts/plan-mode.md` verbatim. |
 
 ## The override file (`agents/plan.md`)
 
@@ -33,7 +30,7 @@ The load-bearing block is the frontmatter, reproduced verbatim:
 
 ```yaml
 ---
-description: "OMP-style planning agent: decision-complete execution plans (Context/Approach/Critical files/Verification/Assumptions) with grounded, concrete edits and no padding."
+description: "Planning agent: decision-complete execution plans (Context/Approach/Critical files/Verification/Assumptions) with grounded, concrete edits and no padding."
 mode: primary
 permission:
   read: allow
@@ -54,7 +51,7 @@ permission:
 
 The filename `plan` plus `mode: primary` overrides the built-in plan agent by name. The body is the prompt verbatim, plus this appendix:
 
-> You are read-only except for the plan artifact: write it to `plans/<slug>-plan.md` (slug: kebab-case `[a-z0-9-]`), then emit a concise chat summary of the plan. Never modify any other file; writes are allowed only for `**/plans/*.md`, everything else is denied, and `bash` is permission-gated to ask. Approval = the user reviews the file and switches to the Build agent. For parallel research, spawn the built-in `Explore` (codebase) and `Scout` (external docs/deps) subagents.
+> You are read-only, then emit a concise chat summary of the plan. Never modify any files and `bash` is permission-gated to ask. Approval = the user reviews the plan and switches to the Build agent. For parallel research, spawn the built-in `Explore` (codebase) and `Scout` (external docs/deps) subagents.
 
 ## Permission model — read this first
 
@@ -103,7 +100,7 @@ The filename `plan` overrides the built-in plan agent by name (`mode: primary`).
 "agent": {
   "plan": {
     "mode": "primary",
-    "prompt": { "file": "~/.config/opencode/prompts/omp-plan-mode.md" },
+    "prompt": { "file": "~/.config/opencode/prompts/plan-mode.md" },
     "permission": {
       "read": "allow", "glob": "allow", "grep": "allow",
       "edit": { "**/plans/*.md": "allow", "*": "deny" },
@@ -131,7 +128,7 @@ One pass, four steps. Expected output is given for each.
 
 ## Usage
 
-In the Opencode TUI: switch to the `plan` agent, paste the request, review the plan file it writes to `plans/<slug>-plan.md`, then switch to the Build agent to implement. The agent is read-only except for the plan artifact; writes are allowed only for `**/plans/*.md` (denied everywhere else) and `bash` stays permission-gated to ask.
+In the Opencode TUI: switch to the `plan` agent, paste the request, review the plan, then switch to the Build agent to implement. The agent is read-only and `bash` stays permission-gated to ask.
 
 Non-interactive one-liner:
 
@@ -153,16 +150,5 @@ Behaviors verified against Opencode `0.0.0-arm64-sync-202608280755` with `deepse
 
 ## Keeping prompt and agent in sync
 
-When `prompts/omp-plan-mode.md` changes, copy it verbatim into `agents/plan.md` as the body (the appendix and frontmatter stay unchanged), then re-run the install step.
+When `prompts/plan-mode.md` changes, copy it verbatim into `agents/plan.md` as the body (the frontmatter stays unchanged), then re-run the install step.
 
-## Benchmarking
-
-When comparing against OMP plan mode, **pin the same model on both harnesses** (e.g. `opencode run --model <model-id>` and the OMP session's model). Model differences confound prompt differences; any delta from a model mismatch must be tagged `model-driven` in `benchmark/findings.md`, not `prompt-driven`.
-
-- `benchmark/targets/` holds the four requirement texts.
-- `benchmark/rubric.md` the 8 scoring dimensions.
-- `benchmark/run.md` the procedure.
-- `benchmark/results/` the captured plans.
-- `benchmark/findings.md` the scores and causes.
-
-Note: the `omp` CLI's opencode.ai gateway can be rate-limited (weekly 429). If it is, run the OMP side in an OMP harness session on the same model ID instead of the CLI.

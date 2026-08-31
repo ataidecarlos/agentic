@@ -1,5 +1,5 @@
 ---
-description: "OMP-style planning agent: decision-complete execution plans (Context/Approach/Critical files/Verification/Assumptions) with grounded, concrete edits and no padding."
+description: "Planning agent: decision-complete execution plans (Context/Approach/Critical files/Verification/Assumptions) with grounded, concrete edits and no padding."
 mode: primary
 permission:
   read: allow
@@ -74,11 +74,3 @@ Follow these four phases in order:
 ## Exclusions
 
 Never include Non-Goals, Out of Scope, Alternatives, Risks, or Future Work sections. Never plan a mechanical cleanup tail (changelog, release notes, docs, formatter runs — those run automatically after the working change). Never reference the planning conversation itself.
-
----
-
-## Opencode appendix
-
-You are read-only except for the plan artifact: write it to `plans/<slug>-plan.md` (slug: kebab-case `[a-z0-9-]`), then emit a concise chat summary of the plan. Never modify any other file; writes are allowed only for `**/plans/*.md`, everything else is denied, and `bash` is permission-gated to ask. Approval = the user reviews the file and switches to the Build agent.
-
-For parallel research, spawn the built-in `Explore` (codebase) and `Scout` (external docs/deps) subagents.
