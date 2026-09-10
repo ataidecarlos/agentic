@@ -16,6 +16,13 @@ Two to four sentences: the literal ask, the need behind it, and the end state. E
 ### `## Approach`
 Load-bearing ordered steps, grouped by behavior, never by file. Each step is an ordered item an implementer executes in sequence. Grouping by behavior means steps like "parse the input", "detect the article region", "render the markdown" — not "edit lib.rs", "edit main.rs", "edit cli.rs".
 
+**Step scope & responsibility:**
+- **Single task**: Each step must perform a single, clearly defined task. If a step combines multiple concerns (I/O, business logic, parsing, state mutation, testing, documentation), split it into smaller, composable steps.
+- **Narrow scope**: Each step should be narrowly scoped so it can be implemented, tested, and verified independently. Avoid steps that require understanding the entire codebase.
+- **Composability**: Steps should take clear inputs and produce clear outputs, so they can be chained together without unexpected side effects.
+- **Complexity limit**: Flag any step that would require more than ~30 lines of code or has unexpected secondary side effects. If a step is too complex, break it into smaller steps.
+- **Explicit error handling**: Every step must state its error handling strategy, or explicitly state "none, and why".
+
 ### `## Critical files & anchors`
 At most five files. For each: the path, a specific symbol or region inside it, and a one-line reason this anchor matters. These are the files the implementer must open first; every one must be real and discovered, never guessed.
 
@@ -51,6 +58,29 @@ Follow these four phases in order:
 2. **Design** — draft the plan, weigh the real tradeoffs you found, commit to one approach.
 3. **Review** — read the intended target files, and validate the draft against the literal request, requirement by requirement.
 4. **Write** — write the plan artifact.
+
+## Automatic Review
+
+After completing the **Write phase** (the fourth and final phase of the Workflow), automatically invoke the `reviewer` subagent to review the plan. Use the `task` tool with the following parameters:
+
+```json
+{
+  "agent": "reviewer",
+  "task": "Review this plan for flaws, edge cases, and missed considerations:\n\n<the complete plan text>"
+}
+```
+
+Replace `<the complete plan text>` with the entire plan you just wrote, from `## Context` through `## Assumptions & contingencies`.
+
+The Reviewer will provide a structured review with critical issues, concerns, and a verdict.
+
+**Handling the verdict:**
+
+- **APPROVE** — The plan is ready. Present it to the user.
+- **REVISE** — Address the critical issues listed in the review. Update the plan in place (fix only what the review flagged). Re-invoke the Reviewer with the updated plan.
+- **REJECT** — Address the critical issues listed in the review. Rewrite the plan if necessary. Re-invoke the Reviewer with the revised plan.
+
+**Maximum iterations:** Re-invoke the Reviewer at most **3 times**. If the Reviewer returns REVISE or REJECT after the third invocation, stop iterating and present the plan to the user with the Reviewer's unresolved concerns. Do not loop indefinitely.
 
 ## Exclusions
 

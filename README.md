@@ -1,138 +1,287 @@
 # agentic
 
-Harness-agnostic agents and skills for AI coding assistants. Currently includes a planning agent that produces decision-complete execution plans with the OMP five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no unsolicited padding.
+Agents and skills for Opencode. Includes a planning agent that produces decision-complete execution plans, a reviewer agent that acts as a devil's advocate to find flaws in plans and code reviews, and a hindsight skill for session-end self-improvement.
 
 ## What this is
 
-Two deliverables, one relationship:
+Three deliverables, one relationship:
 
-- `prompts/plan-mode.md` — the canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona.
-- `agents/plan.md` — the Opencode `plan` agent override. Its body is `prompts/plan-mode.md` **verbatim**.
+- `prompts/<agent-name>.md` — the canonical portable prompt. Harness-agnostic prose.
+- `agents/<agent-name>.md` — the Opencode agent. Frontmatter + verbatim prompt body.
+- `skills/<skill-name>/SKILL.md` — the OpenCode skill. Frontmatter + instructions.
 
-The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body (see "Keeping prompt and agent in sync").
+The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body.
 
-## How plan mode works
+## Agents
 
-A planning agent produces exactly one deliverable: a written execution plan an engineer who has not seen the conversation can follow top-to-bottom without making a single design decision. Every plan contains exactly five sections, in order — `## Context`, `## Approach`, `## Critical files & anchors`, `## Verification`, `## Assumptions & contingencies` — and nothing else. The prompt enforces the concrete-edit rule (every step names a verb, an exact target, and the new behavior), grounding-by-discovery (reads, globs, greps, and optional parallel research subagents — never guesses stated as settled), and exclusions for unsolicited padding (no extra sections, no mechanical cleanup tail, no references to the planning conversation itself).
+### Plan Agent
 
-The full canonical text is `prompts/plan-mode.md`; it is not duplicated here.
+Produces decision-complete execution plans with the five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no unsolicited padding.
+
+After completing the plan, automatically invokes the Reviewer agent to review the plan for flaws.
+
+### Reviewer Agent
+
+Acts as a devil's advocate to identify flaws, edge cases, and missed considerations in plans and code reviews. Runs in a separate context window to avoid carrying forward assumptions.
+
+The Reviewer produces a structured review with:
+- Review Summary
+- Critical Issues
+- Concerns
+- Minor Observations
+- Verdict (APPROVE / REVISE / REJECT)
+
+## Skills
+
+### Hindsight
+
+A session-end self-improvement skill that reviews everything accomplished in a session, distills genuine process lessons, and saves the durable ones as persistent memory. Trigger on:
+- "get some hindsight"
+- "run a hindsight pass"
+- "what should we improve"
+- "review today and notate lessons"
+- "what did you learn today"
+- "save what's worth remembering from this session"
+
+Memory is stored at `~/.opencode/projects/<project-slug>/memory/`.
+
+The skill is located at `skills/hindsight/SKILL.md` and deployed to `.opencode/skills/hindsight/SKILL.md`.
+
+## Persistent Memory
+
+The project maintains lessons learned from past sessions in `~/.opencode/projects/agentic/memory/`. These lessons are automatically loaded at the start of each session through `AGENTS.md`, which all agents are required to read.
+
+**Memory location:** `~/.opencode/projects/agentic/memory/`
+
+**How it works:**
+- `AGENTS.md` instructs all agents to read `MEMORY.md` at session start
+- `MEMORY.md` is the index listing all lessons
+- Individual lesson files (e.g., `001-deployment-infrastructure.md`) contain the full lesson content
+- The hindsight skill writes new lessons to this directory
+
+**Current lessons:**
+1. Deployment Infrastructure — Always update deployment scripts when adding new agents or skills
+2. Avoid Hardcoding — Don't hardcode provider-specific values in portable agents
+3. Clarify Requirements — Ask clarifying questions before implementing complex features
+4. Test Integration — Test agent orchestration integration points early and iterate
+5. Document Memory — Document memory system conventions for skills clearly
+
+See `AGENTS.md` for the complete memory loading mechanism.
+
+## Agent Orchestration
+
+The Plan agent automatically invokes the Reviewer after completing a plan. This ensures every plan is reviewed for flaws before implementation.
+
+```mermaid
+graph LR
+    A[User Request] --> B[Plan Agent]
+    B --> C[Plan Output]
+    C --> D[Reviewer Agent]
+    D --> E{Verdict?}
+    E -->|APPROVE| F[Ready for Build]
+    E -->|REVISE| B
+    E -->|REJECT| B
+```
+
+The Build agent (not yet created) can also manually invoke the Reviewer for code reviews.
 
 ## Layout
 
-| Path | Purpose |
-|---|---|
-| `prompts/plan-mode.md` | Canonical portable prompt. Harness-agnostic prose; usable in any harness that supports a planning agent/persona. |
-| `agents/plan.md` | Opencode `plan` agent override. Body is `prompts/plan-mode.md` verbatim. |
-
-## The override file (`agents/plan.md`)
-
-The load-bearing block is the frontmatter, reproduced verbatim:
-
-```yaml
----
-description: "Planning agent: decision-complete execution plans (Context/Approach/Critical files/Verification/Assumptions) with grounded, concrete edits and no padding."
-mode: primary
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  edit: deny
-  bash: deny
-  task: deny
-  webfetch: allow
-  websearch: allow
-  lsp: allow
-  skill: allow
-  todowrite: allow
----
+```
+agentic/
+├── prompts/
+│   ├── plan-mode.md          # Canonical Plan prompt
+│   └── reviewer.md           # Canonical Reviewer prompt
+├── agents/
+│   ├── plan.md               # Opencode Plan agent (frontmatter + verbatim body)
+│   └── reviewer.md           # Opencode Reviewer agent (hidden, frontmatter + verbatim body)
+├── skills/
+│   └── hindsight/
+│       └── SKILL.md          # Hindsight skill
+├── deploy.ps1                # PowerShell deployment script
+├── deploy.sh                 # Bash deployment script
+├── AGENTS.md                # Project instructions (memory loading, conventions)
+└── README.md
 ```
 
-The filename `plan` plus `mode: primary` overrides the built-in plan agent by name. The body is the prompt verbatim. The frontmatter enforces the read-only boundary:
-
-> File edits, shell commands, and subagent delegation are denied. The agent performs discovery with its allowed read-only tools and emits the plan in chat. The user reviews the plan, then switches to the Build agent to implement it.
-
-## Permission model — read this first
-
-Fully read-only. File edits, shell commands, and subagent delegation are denied; `todowrite` is allowed only for planning-state tracking.
+| Path | Purpose |
+|---|---|
+| `prompts/plan-mode.md` | Canonical Plan prompt. |
+| `prompts/reviewer.md` | Canonical Reviewer prompt. |
+| `agents/plan.md` | Opencode Plan agent. Body is `prompts/plan-mode.md` verbatim. |
+| `agents/reviewer.md` | Opencode Reviewer agent. Body is `prompts/reviewer.md` verbatim. |
+| `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
+| `AGENTS.md` | Project instructions. Instructs agents to load persistent memory at session start. |
 
 ## Deployment
 
-Two modes. Keep the agent body and the portable prompt in sync — they are the same text.
+The deployment scripts install agents, skills, and the AGENTS.md file:
 
-### Global (all projects)
+**PowerShell (Windows):**
+
+```powershell
+# Global (all projects)
+.\deploy.ps1
+
+# Per-project
+.\deploy.ps1 -Project .
+```
+
+**Bash (Unix-like):**
+
+```bash
+# Global (all projects)
+./deploy.sh
+
+# Per-project
+./deploy.sh --project .
+```
+
+The scripts deploy:
+- **Agents** to `~/.config/opencode/agents/` (global) or `<project>/.opencode/agents/` (per-project)
+- **Skills** to `~/.config/opencode/skills/` (global) or `<project>/.opencode/skills/` (per-project)
+- **AGENTS.md** to `~/.config/opencode/AGENTS.md` (global) or `<project>/.opencode/AGENTS.md` (per-project)
+
+### AGENTS.md Deployment Behavior
+
+The deployment scripts handle AGENTS.md intelligently:
+
+- **If AGENTS.md exists at the target location:** The script creates a backup (`AGENTS.md.bak`), then appends the project's AGENTS.md content to the existing file. This preserves global instructions while adding project-specific ones.
+
+- **If AGENTS.md does not exist:** The script copies the project's AGENTS.md to the target location.
+
+This ensures that global AGENTS.md files (with instructions for all projects) are not overwritten by project-specific deployments.
+
+### Manual deployment
+
+**Global (all projects):**
 
 ```sh
+# Agents
 mkdir -p ~/.config/opencode/agents
 cp agents/plan.md ~/.config/opencode/agents/plan.md
+cp agents/reviewer.md ~/.config/opencode/agents/reviewer.md
+
+# Skills
+mkdir -p ~/.config/opencode/skills/hindsight
+cp skills/hindsight/SKILL.md ~/.config/opencode/skills/hindsight/SKILL.md
+
+# AGENTS.md
+cp AGENTS.md ~/.config/opencode/AGENTS.md
 ```
 
 PowerShell:
 
 ```powershell
+# Agents
 New-Item -ItemType Directory -Force ~/.config/opencode/agents | Out-Null
-Copy-Item agents/plan.md ~/.config/opencode/agents/plan.md
+Copy-Item agents\plan.md ~/.config\opencode\agents\plan.md
+Copy-Item agents\reviewer.md ~/.config\opencode\agents\reviewer.md
+
+# Skills
+New-Item -ItemType Directory -Force ~/.config/opencode/skills/hindsight | Out-Null
+Copy-Item skills\hindsight\SKILL.md ~/.config\opencode\skills\hindsight\SKILL.md
+
+# AGENTS.md
+Copy-Item AGENTS.md ~/.config\opencode\AGENTS.md
 ```
 
-### Per-project
+**Per-project:**
 
 ```sh
+# Agents
 mkdir -p <project>/.opencode/agents
 cp agents/plan.md <project>/.opencode/agents/plan.md
+cp agents/reviewer.md <project>/.opencode/agents/reviewer.md
+
+# Skills
+mkdir -p <project>/.opencode/skills/hindsight
+cp skills/hindsight/SKILL.md <project>/.opencode/skills/hindsight/SKILL.md
+
+# AGENTS.md
+cp AGENTS.md <project>/.opencode/AGENTS.md
 ```
 
 PowerShell:
 
 ```powershell
+# Agents
 New-Item -ItemType Directory -Force <project>/.opencode/agents | Out-Null
-Copy-Item agents/plan.md <project>/.opencode/agents/plan.md
-```
+Copy-Item agents\plan.md <project>/.opencode\agents\plan.md
+Copy-Item agents\reviewer.md <project>/.opencode\agents\reviewer.md
 
-The filename `plan` overrides the built-in plan agent by name (`mode: primary`). If a Markdown-name override does not replace the built-in in your Opencode version (check with step 2 of "Install & verify" below), fall back to a JSON override in `opencode.jsonc`:
+# Skills
+New-Item -ItemType Directory -Force <project>/.opencode/skills/hindsight | Out-Null
+Copy-Item skills\hindsight\SKILL.md <project>/.opencode\skills\hindsight\SKILL.md
 
-```jsonc
-"agent": {
-  "plan": {
-    "mode": "primary",
-    "prompt": { "file": "~/.config/opencode/prompts/plan-mode.md" },
-    "permission": {
-      "read": "allow", "glob": "allow", "grep": "allow",
-      "edit": "deny",
-      "bash": "deny", "task": "deny",
-      "webfetch": "allow", "websearch": "allow", "lsp": "allow",
-      "skill": "allow", "todowrite": "allow"
-    }
-  }
-}
+# AGENTS.md
+Copy-Item AGENTS.md <project>/.opencode\AGENTS.md
 ```
 
 ## Install & verify
 
-One pass, two steps. Expected output is given for each.
+1. **Copy the agent and skill files** to the expected location (see above).
 
-1. **Copy the override.** Global: `mkdir -p ~/.config/opencode/agents && cp agents/plan.md ~/.config/opencode/agents/plan.md`. Per-project: `mkdir -p <project>/.opencode/agents && cp agents/plan.md <project>/.opencode/agents/plan.md`. (PowerShell: `New-Item -ItemType Directory -Force`, `Copy-Item`.)
-
-2. **Verify registration.** Run `opencode agent list`; expect a `plan (primary)` entry. If `plan` is listed but not primary, or a second `plan` coexists, the Markdown-name override did not replace the built-in — use the JSON fallback above.
+2. **Verify agent registration:**
+   ```sh
+   opencode agent list
+   ```
+   Expected output: `plan (primary)` and `reviewer (subagent)` entries.
 
 ## Usage
 
-In the Opencode TUI: switch to the `plan` agent, paste the request, review the plan, then switch to the Build agent to implement. The agent is read-only: file edits, shell commands, and subagent delegation are denied.
+### Plan Agent
 
-Non-interactive one-liner:
+**TUI:** Switch to the `plan` agent, paste the request, review the plan, then switch to the Build agent to implement.
+
+**CLI:**
 
 ```sh
 opencode run --agent plan --model <model-id> "<request>"
 ```
 
-`--auto` is unnecessary because the agent has no `ask`-gated permissions.
+### Reviewer Agent
 
-## Behaviors & troubleshooting
+**Manual invocation:**
 
-Behaviors verified against Opencode `0.0.0-arm64-sync-202608280755` with `deepseek/deepseek-v4-flash`. If your version differs, `opencode agent list` and `opencode run --help` are authoritative.
+```sh
+opencode run --agent reviewer --prompt "Review this plan: <plan content>"
+```
 
-- **Provider flake:** `deepseek/deepseek-v4-flash` occasionally returns an empty completion or truncates the final response at the output-token limit. Fix: rerun the request.
-- **Don't trust the model's self-reported tool list** ("list every tool available to you"). Models omit tools (e.g. `write`) from their enumeration. Trust `opencode agent list` and the resolved config instead.
+**Automatic invocation:** The Plan agent automatically invokes the Reviewer after completing a plan.
+
+### Hindsight Skill
+
+**Trigger phrases:**
+- "get some hindsight"
+- "run a hindsight pass"
+- "what should we improve"
+- "review today and notate lessons"
+- "what did you learn today"
+- "save what's worth remembering from this session"
+
+**Behavior:**
+- Reviews the full session end-to-end
+- Extracts durable process lessons (not one-off specifics)
+- Saves lessons as persistent memory at `~/.opencode/projects/<project-slug>/memory/`
+- Updates existing memory entries instead of creating duplicates
+- If no memory system exists, produces a standalone document
+
+## Permission model
+
+### Plan Agent
+
+Fully read-only for exploration. File edits, shell commands, and subagent delegation are denied; `todowrite` is allowed only for planning-state tracking. The `task` permission is allowed to invoke the Reviewer subagent.
+
+### Reviewer Agent
+
+Fully read-only. File edits, shell commands, and subagent delegation are denied. The Reviewer reads plans and code from scratch without prior context.
 
 ## Keeping prompt and agent in sync
 
-When `prompts/plan-mode.md` changes, copy it verbatim into `agents/plan.md` as the body (the frontmatter stays unchanged), then re-run the install step.
+When `prompts/<agent-name>.md` changes, copy it verbatim into `agents/<agent-name>.md` as the body (the frontmatter stays unchanged), then re-deploy.
 
+## Behaviors & troubleshooting
+
+- **Provider flake:** Some providers occasionally return empty completions or truncate at the output-token limit. Fix: rerun the request.
+- **Don't trust the model's self-reported tool list** ("list every tool available to you"). Models omit tools from their enumeration. Trust `opencode agent list` instead.
