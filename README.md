@@ -1,6 +1,6 @@
-# opencode-plan-mode
+# agentic
 
-Plan mode for Opencode: a distilled, harness-agnostic planning prompt plus an Opencode `plan` agent override that applies it. The agent produces decision-complete execution plans with the OMP five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no unsolicited padding.
+Harness-agnostic agents and skills for AI coding assistants. Currently includes a planning agent that produces decision-complete execution plans with the OMP five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no unsolicited padding.
 
 ## What this is
 
