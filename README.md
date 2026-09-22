@@ -43,21 +43,63 @@ A session-end self-improvement skill that reviews everything accomplished in a s
 - "what did you learn today"
 - "save what's worth remembering from this session"
 
-Memory is stored at `~/.opencode/projects/<project-slug>/memory/`.
+Memory is stored globally at `~/.opencode/memory/`.
 
 The skill is located at `skills/hindsight/SKILL.md` and deployed to `.opencode/skills/hindsight/SKILL.md`.
 
+### Karpathy Guidelines
+
+Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876). Loaded automatically by the Plan and Reviewer agents at session start. Four principles in priority order:
+
+1. **Goal-Driven Execution** (highest priority) — Transform tasks into verifiable goals with success criteria; loop until verified.
+2. **Think Before Coding** — State assumptions explicitly; surface tradeoffs; push back when warranted.
+3. **Simplicity First** — Minimum code that solves the problem; nothing speculative.
+4. **Surgical Changes** — Touch only what you must; clean up only your own mess.
+
+The skill is located at `skills/karpathy-guidelines/SKILL.md` and deployed to `.opencode/skills/karpathy-guidelines/SKILL.md`.
+
+### Caveman
+
+Ultra-compressed communication mode that cuts output tokens while keeping technical accuracy. Loaded by default for Plan and Reviewer agents. It can also be activated manually via `/caveman`, "caveman mode", "talk like caveman", "be brief", or "less tokens". Four intensity levels: lite, full (default), ultra, and wenyan variants (classical Chinese). Derived from [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman).
+
+The skill is located at `skills/caveman/SKILL.md` and deployed to `.opencode/skills/caveman/SKILL.md`.
+
 ## Persistent Memory
 
-The project maintains lessons learned from past sessions in `~/.opencode/projects/agentic/memory/`. These lessons are automatically loaded at the start of each session through `AGENTS.md`, which all agents are required to read.
+The project maintains global lessons learned from past sessions in `~/.opencode/memory/`. These lessons are automatically loaded at the start of each session through `AGENTS.md`, which all agents are required to read.
 
-**Memory location:** `~/.opencode/projects/agentic/memory/`
+**Memory location:** `~/.opencode/memory/`
 
 **How it works:**
 - `AGENTS.md` instructs all agents to read `MEMORY.md` at session start
 - `MEMORY.md` is the index listing all lessons
 - Individual lesson files (e.g., `001-deployment-infrastructure.md`) contain the full lesson content
 - The hindsight skill writes new lessons to this directory
+
+### Proactive Hindsight Suggestions
+
+After an implementation that required iteration or course correction, agents should suggest a hindsight pass. They should not run it automatically and should not suggest it after straightforward tasks or ordinary planning conversations.
+
+### Cross-platform paths
+
+`~/.opencode/memory/` is a home-relative logical path. On Unix-like systems it resolves under `/home/<user>/` or `/Users/<user>/`; on Windows it resolves under `C:\Users\<user>\`. Agents must resolve the user's home directory instead of hardcoding a platform-specific path.
+
+### Permission configuration
+
+To avoid repeated approval prompts when agents read or update global memory, add these rules to the global OpenCode config at `~/.config/opencode/opencode.jsonc` (on Windows, use the equivalent OpenCode configuration directory):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "external_directory", "resource": "~/.opencode/memory/*", "effect": "allow" },
+    { "action": "read", "resource": "~/.opencode/memory/*", "effect": "allow" },
+    { "action": "edit", "resource": "~/.opencode/memory/*", "effect": "allow" }
+  ]
+}
+```
+
+OpenCode expands the `~` prefix using the current user's home directory. Preserve the home-relative form on Windows; do not copy the Unix `/home/<user>/` example into Windows configuration.
 
 **Current lessons:**
 1. Deployment Infrastructure — Always update deployment scripts when adding new agents or skills
@@ -96,8 +138,12 @@ agentic/
 │   ├── plan.md               # Opencode Plan agent (frontmatter + verbatim body)
 │   └── reviewer.md           # Opencode Reviewer agent (hidden, frontmatter + verbatim body)
 ├── skills/
-│   └── hindsight/
-│       └── SKILL.md          # Hindsight skill
+│   ├── hindsight/
+│   │   └── SKILL.md          # Hindsight skill
+│   ├── karpathy-guidelines/
+│   │   └── SKILL.md          # Karpathy guidelines skill
+│   └── caveman/
+│       └── SKILL.md          # Caveman skill
 ├── deploy.ps1                # PowerShell deployment script
 ├── deploy.sh                 # Bash deployment script
 ├── AGENTS.md                # Project instructions (memory loading, conventions)
@@ -111,6 +157,8 @@ agentic/
 | `agents/plan.md` | Opencode Plan agent. Body is `prompts/plan-mode.md` verbatim. |
 | `agents/reviewer.md` | Opencode Reviewer agent. Body is `prompts/reviewer.md` verbatim. |
 | `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
+| `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
+| `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
 | `AGENTS.md` | Project instructions. Instructs agents to load persistent memory at session start. |
 
 ## Deployment
@@ -165,6 +213,10 @@ cp agents/reviewer.md ~/.config/opencode/agents/reviewer.md
 # Skills
 mkdir -p ~/.config/opencode/skills/hindsight
 cp skills/hindsight/SKILL.md ~/.config/opencode/skills/hindsight/SKILL.md
+mkdir -p ~/.config/opencode/skills/karpathy-guidelines
+cp skills/karpathy-guidelines/SKILL.md ~/.config/opencode/skills/karpathy-guidelines/SKILL.md
+mkdir -p ~/.config/opencode/skills/caveman
+cp skills/caveman/SKILL.md ~/.config/opencode/skills/caveman/SKILL.md
 
 # AGENTS.md
 cp AGENTS.md ~/.config/opencode/AGENTS.md
@@ -181,6 +233,10 @@ Copy-Item agents\reviewer.md ~/.config\opencode\agents\reviewer.md
 # Skills
 New-Item -ItemType Directory -Force ~/.config/opencode/skills/hindsight | Out-Null
 Copy-Item skills\hindsight\SKILL.md ~/.config\opencode\skills\hindsight\SKILL.md
+New-Item -ItemType Directory -Force ~/.config/opencode/skills/karpathy-guidelines | Out-Null
+Copy-Item skills\karpathy-guidelines\SKILL.md ~/.config\opencode\skills\karpathy-guidelines\SKILL.md
+New-Item -ItemType Directory -Force ~/.config/opencode/skills/caveman | Out-Null
+Copy-Item skills\caveman\SKILL.md ~/.config\opencode\skills\caveman\SKILL.md
 
 # AGENTS.md
 Copy-Item AGENTS.md ~/.config\opencode\AGENTS.md
@@ -197,6 +253,10 @@ cp agents/reviewer.md <project>/.opencode/agents/reviewer.md
 # Skills
 mkdir -p <project>/.opencode/skills/hindsight
 cp skills/hindsight/SKILL.md <project>/.opencode/skills/hindsight/SKILL.md
+mkdir -p <project>/.opencode/skills/karpathy-guidelines
+cp skills/karpathy-guidelines/SKILL.md <project>/.opencode/skills/karpathy-guidelines/SKILL.md
+mkdir -p <project>/.opencode/skills/caveman
+cp skills/caveman/SKILL.md <project>/.opencode/skills/caveman/SKILL.md
 
 # AGENTS.md
 cp AGENTS.md <project>/.opencode/AGENTS.md
@@ -213,6 +273,10 @@ Copy-Item agents\reviewer.md <project>/.opencode\agents\reviewer.md
 # Skills
 New-Item -ItemType Directory -Force <project>/.opencode/skills/hindsight | Out-Null
 Copy-Item skills\hindsight\SKILL.md <project>/.opencode\skills\hindsight\SKILL.md
+New-Item -ItemType Directory -Force <project>/.opencode/skills/karpathy-guidelines | Out-Null
+Copy-Item skills\karpathy-guidelines\SKILL.md <project>/.opencode\skills\karpathy-guidelines\SKILL.md
+New-Item -ItemType Directory -Force <project>/.opencode/skills/caveman | Out-Null
+Copy-Item skills\caveman\SKILL.md <project>/.opencode\skills\caveman\SKILL.md
 
 # AGENTS.md
 Copy-Item AGENTS.md <project>/.opencode\AGENTS.md
@@ -263,7 +327,7 @@ opencode run --agent reviewer --prompt "Review this plan: <plan content>"
 **Behavior:**
 - Reviews the full session end-to-end
 - Extracts durable process lessons (not one-off specifics)
-- Saves lessons as persistent memory at `~/.opencode/projects/<project-slug>/memory/`
+- Saves lessons as persistent memory at `~/.opencode/memory/`
 - Updates existing memory entries instead of creating duplicates
 - If no memory system exists, produces a standalone document
 

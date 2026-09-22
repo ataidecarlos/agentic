@@ -8,13 +8,13 @@ This project maintains persistent lessons learned from previous sessions. **At t
 
 ### Memory Index
 
-Read `~/.opencode/projects/agentic/memory/MEMORY.md` to see all available lessons.
+Read `~/.opencode/memory/MEMORY.md` to see all available lessons. This path is a logical home-relative location: on Windows, resolve it through the user's home directory rather than treating `/home/...` as literal.
 
 ### Memory Location
 
 Individual memory files are stored at:
 ```
-~/.opencode/projects/agentic/memory/
+~/.opencode/memory/
 ```
 
 ### How to Use Memory
@@ -50,6 +50,17 @@ As of this session, the following lessons have been learned:
 3. **Clarify Requirements** — Ask clarifying questions before implementing complex features
 4. **Test Integration** — Test agent orchestration integration points early and iterate
 5. **Document Memory** — Document memory system conventions for skills clearly
+
+### Proactive Hindsight Suggestions
+
+After completing an implementation where iteration or course correction occurred, proactively suggest running a hindsight pass to capture lessons learned. Suggest it only when:
+
+- A concrete plan was followed but required adjustments
+- Assumptions turned out wrong and required backtracking
+- Unexpected issues required multiple attempts to resolve
+- The implementation succeeded but took more iterations than expected
+
+Do not suggest hindsight for straightforward implementations, non-implementation conversations, or every task. Never run hindsight automatically; suggest it and wait for explicit confirmation.
 
 ## Project Structure
 

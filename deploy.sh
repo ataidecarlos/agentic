@@ -73,7 +73,7 @@ for FILE in "${AGENT_FILES[@]}"; do
     FILENAME="$(basename "$FILE")"
     cp -f "$FILE" "$TARGET_AGENTS_DIR/$FILENAME"
     echo "  Agent: $FILENAME"
-    ((AGENT_COUNT++))
+    AGENT_COUNT=$((AGENT_COUNT + 1))
 done
 
 # Copy all skill directories
@@ -112,7 +112,7 @@ for DIR in "${SKILL_DIRS[@]}"; do
         cp -f "$FILE" "$TARGET_FILE_PATH"
     done
 
-    ((SKILL_COUNT++))
+    SKILL_COUNT=$((SKILL_COUNT + 1))
 done
 
 # Deploy AGENTS.md (append if exists, copy if not)

@@ -9,14 +9,22 @@ disable-model-invocation: true
 
 A session-end self-improvement pass. Read-only against the session's actual
 work — it never redoes or re-opens a task — and write-only against memory.
-User-triggered only: a hindsight pass writes persistent memory, so timing
-stays the user's call, never something run on a hunch.
+Hindsight writes persistent memory, so never run it automatically. It may be
+suggested after an implementation with genuine iteration, but timing stays the
+user's call.
 
 ## When this fires
 
-On-demand only: "get some hindsight," "run a hindsight pass," "what should
-we improve," "review today and notate lessons," "what did you learn today,"
-"save what's worth remembering from this session."
+Explicit requests include: "get some hindsight," "run a hindsight pass," "what
+should we improve," "review today and notate lessons," "what did you learn
+today," and "save what's worth remembering from this session."
+
+After completing an implementation, suggest a hindsight pass only when there
+was genuine iteration, such as plan adjustments, backtracking after a wrong
+assumption, multiple attempts to resolve an unexpected issue, or more
+iterations than expected. Do not suggest it after straightforward work,
+non-implementation conversations, or every task. Say that the session had
+iteration worth capturing and ask whether the user wants a hindsight pass.
 
 ## Process
 
@@ -104,13 +112,12 @@ Check whether a persistent memory system is actually available before
 assuming Step 5's fallback — most agent harnesses that have one expose it
 distinctly from ordinary project files:
 
-- **OpenCode** keeps per-project memory under
-  `~/.opencode/projects/<project-slug>/memory/` (the slug is derived from the
-  project's working-directory path — different per project, not a fixed
-  path), one markdown file per fact, each with `name`/`description`/
-  `metadata.type` frontmatter. `type: feedback` fits nearly every hindsight
-  lesson — it's guidance on how to work, with a why. That same folder's
-  `MEMORY.md` is the index loaded into every session.
+- **OpenCode** keeps global memory under `~/.opencode/memory/`, one markdown
+  file per fact, each with `name`/`description`/`metadata.type` frontmatter.
+  `type: feedback` fits nearly every hindsight lesson — it's guidance on how
+  to work, with a why. That folder's `MEMORY.md` is the index loaded into every
+  session. Treat this as a home-relative logical path; resolve it through the
+  user's home directory on Windows rather than using a Unix absolute path.
 - **Memory loading**: The project's `AGENTS.md` file instructs all agents to
   read `MEMORY.md` at session start. This ensures lessons from previous
   sessions are available to guide current work. The hindsight skill writes
