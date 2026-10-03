@@ -1,0 +1,6 @@
+# deploy.sh is executed through its shebang. A CRLF working copy makes the
+# kernel fail with "bad interpreter", so pin shell scripts to LF regardless of
+# the contributor's core.autocrlf setting.
+*.sh text eol=lf
+
+*.ps1 text eol=crlf

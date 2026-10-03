@@ -69,6 +69,7 @@ agentic/
 ├── prompts/          # Canonical portable prompts
 ├── agents/           # Opencode agents (frontmatter + prompt body)
 ├── skills/           # Opencode skills
+├── mcp/              # MCP servers installed by the deploy scripts
 ├── deploy.ps1        # PowerShell deployment script
 ├── deploy.sh         # Bash deployment script
 └── AGENTS.md         # This file
@@ -77,6 +78,23 @@ agentic/
 ## Agent Orchestration
 
 The Plan agent automatically invokes the Reviewer agent after completing a plan. This ensures every plan is reviewed for flaws before implementation.
+
+## Deployment Invariants
+
+`deploy.ps1` and `deploy.sh` must stay idempotent, because the global Opencode
+config directory is shared state that other tools also write to.
+
+- AGENTS.md is wrapped in a pair of `agentic:begin` / `agentic:end` HTML comment
+  markers. A repeat run replaces that block in place; it never appends.
+  Do not spell the full marker strings out anywhere inside this file — the
+  deploy scripts locate the block by matching them, and a second occurrence
+  inside the content would truncate the match.
+- MCP servers are merged by name from `mcp/agentic.opencode.json` into the
+  target's own `opencode.json(c)`. OpenCode loads only one extra config file
+  (selected by `OPENCODE_CONFIG`), so a second `*.opencode.json` file in the
+  config directory is silently ignored.
+- When adding a skill, a prompt, or an MCP server, add it to the source tree so
+  the deploy scripts pick it up. Never hand-edit the deployed copies.
 
 ## Key Principles
 

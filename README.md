@@ -4,11 +4,12 @@ Agents and skills for Opencode. Includes a planning agent that produces decision
 
 ## What this is
 
-Three deliverables, one relationship:
+Four deliverables, one relationship:
 
 - `prompts/<agent-name>.md` — the canonical portable prompt. Harness-agnostic prose.
 - `agents/<agent-name>.md` — the Opencode agent. Frontmatter + verbatim prompt body.
 - `skills/<skill-name>/SKILL.md` — the OpenCode skill. Frontmatter + instructions.
+- `mcp/agentic.opencode.json` — the MCP servers the deployment installs.
 
 The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body.
 
@@ -142,10 +143,19 @@ agentic/
 │   │   └── SKILL.md          # Hindsight skill
 │   ├── karpathy-guidelines/
 │   │   └── SKILL.md          # Karpathy guidelines skill
-│   └── caveman/
-│       └── SKILL.md          # Caveman skill
+│   ├── grill-me/
+│   │   ├── SKILL.md          # Plan/design interview skill
+│   │   └── agents/openai.yaml
+│   ├── caveman/
+│   │   └── SKILL.md          # Caveman skill
+│   ├── obra-superpowers/     # Unpopulated gitlink — see below
+│   ├── stop-slop/            # Unpopulated gitlink — see below
+│   └── understand-anything/  # Unpopulated gitlink — see below
+├── mcp/
+│   └── agentic.opencode.json # MCP servers installed by the deploy scripts
 ├── deploy.ps1                # PowerShell deployment script
 ├── deploy.sh                 # Bash deployment script
+├── MCP.md                    # MCP server recommendations and install notes
 ├── AGENTS.md                # Project instructions (memory loading, conventions)
 └── README.md
 ```
@@ -158,8 +168,21 @@ agentic/
 | `agents/reviewer.md` | Opencode Reviewer agent. Body is `prompts/reviewer.md` verbatim. |
 | `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
+| `skills/grill-me/SKILL.md` | Relentless interview to sharpen a plan or design. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
+| `mcp/agentic.opencode.json` | MCP servers merged into the target Opencode config. |
 | `AGENTS.md` | Project instructions. Instructs agents to load persistent memory at session start. |
+
+### Unpopulated skill gitlinks
+
+`skills/obra-superpowers`, `skills/stop-slop`, and `skills/understand-anything`
+are committed as gitlinks (mode `160000`) but the repository has **no
+`.gitmodules` file**. A fresh clone therefore produces empty directories, and
+both deploy scripts skip them with a warning instead of failing.
+
+To fix, either add a `.gitmodules` entry for each so `git submodule update
+--init --recursive` populates them, or remove the gitlinks. Until then, run
+`codegraph`-free discovery the usual way — those three skills are not installed.
 
 ## Deployment
 
@@ -188,15 +211,73 @@ The deployment scripts install agents, skills, and the AGENTS.md file:
 The scripts deploy:
 - **Agents** to `~/.config/opencode/agents/` (global) or `<project>/.opencode/agents/` (per-project)
 - **Skills** to `~/.config/opencode/skills/` (global) or `<project>/.opencode/skills/` (per-project)
+- **Prompts** to `~/.config/opencode/commands/` (global) or `<project>/.opencode/commands/` (per-project), so each prompt becomes a slash command (`prompts/plan-mode.md` → `/plan-mode`)
+- **MCP servers** merged from `mcp/agentic.opencode.json` into `~/.config/opencode/opencode.jsonc` (global) or `<project>/.opencode/opencode.jsonc` (per-project)
 - **AGENTS.md** to `~/.config/opencode/AGENTS.md` (global) or `<project>/.opencode/AGENTS.md` (per-project)
+
+Skip a section when you only want part of the deployment:
+
+```powershell
+.\deploy.ps1 -NoMcp
+.\deploy.ps1 -NoPrompts
+```
+
+```bash
+./deploy.sh --no-mcp
+./deploy.sh --no-prompts
+```
+
+### Idempotency
+
+Running a deployment twice produces the same result. This matters because the
+global config directory is shared state that other tools also write to.
+
+- **AGENTS.md** is wrapped in a pair of `agentic:begin` / `agentic:end` HTML
+  comment markers. A repeat run replaces that block in place and leaves every
+  other byte of the file alone. Older versions of these scripts appended
+  unconditionally under a `<!-- Appended from agentic project -->` comment,
+  which duplicated the whole block on every run; that legacy block is migrated
+  into the marked block on the first run of the new scripts.
+- **MCP servers** are merged by name. Only the keys defined in
+  `mcp/agentic.opencode.json` are written; every other setting in the target
+  config is preserved, including legacy servers declared directly under `mcp`.
+  Object keys are sorted recursively so the written file is byte-stable across
+  runs and reviewable in version control. The previous file is saved as
+  `<config>.bak`.
+
+### MCP server merge
+
+OpenCode loads exactly one extra config file, selected by the `OPENCODE_CONFIG`
+environment variable. Dropping a second `*.opencode.json` file into the global
+config directory does nothing — it is silently ignored. MCP servers therefore
+have to be merged into the target's own `opencode.json(c)`.
+
+The merge is JSONC-aware: line and block comments are stripped before parsing
+and the file is rewritten as plain JSON. If the target contained comments, the
+script warns you and the original is preserved at `<config>.bak`.
+
+Secrets are never written into the config. The GitHub server reads its token
+from `{env:GITHUB_PERSONAL_ACCESS_TOKEN}`.
+
+### Servers registered disabled
+
+`mcp/agentic.opencode.json` ships two entries with `"disabled": true`:
+
+| Server | Why |
+|---|---|
+| `graphify` | Serves a prebuilt `graphify-out/graph.json` from the working directory, so it only connects in a project where `graphify .` has been run. |
+| `claude_context` | Needs a Zilliz Cloud account for the embedding backend. |
+
+Flip `"disabled"` to `false` (or use `/mcps` in the TUI) once the prerequisite
+exists. See `MCP.md` for prerequisites and corrected install commands.
 
 ### AGENTS.md Deployment Behavior
 
 The deployment scripts handle AGENTS.md intelligently:
 
-- **If AGENTS.md exists at the target location:** The script creates a backup (`AGENTS.md.bak`), then appends the project's AGENTS.md content to the existing file. This preserves global instructions while adding project-specific ones.
+- **If AGENTS.md exists at the target location:** The script creates a backup (`AGENTS.md.bak`), then replaces its own marked block in place. This preserves global instructions while refreshing project-specific ones.
 
-- **If AGENTS.md does not exist:** The script copies the project's AGENTS.md to the target location.
+- **If AGENTS.md does not exist:** The script writes AGENTS.md containing the marked block.
 
 This ensures that global AGENTS.md files (with instructions for all projects) are not overwritten by project-specific deployments.
 

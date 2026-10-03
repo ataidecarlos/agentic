@@ -136,9 +136,19 @@ Code graph servers index your codebase into a knowledge graph, enabling structur
 
 **Install:**
 ```bash
-pip install graphify-mcp
-# Or use as Claude Code skill: /graphify
+pip install "graphifyy[mcp]"
+# The PyPI package is `graphifyy` (double y). The CLI command is `graphify`,
+# and the MCP stdio server is `python -m graphify.serve` (or `graphify-mcp`).
 ```
+
+**Opencode entry:**
+```jsonc
+{ "type": "local", "command": ["python", "-m", "graphify.serve"] }
+```
+
+The server serves a prebuilt `graphify-out/graph.json` from the working
+directory, so it only connects in a project where `graphify .` has already been
+run. It is therefore registered `disabled: true` by default.
 
 **Verdict:** Most comprehensive code graph solution. Install if you need multi-language, multi-format code intelligence.
 
@@ -157,8 +167,13 @@ pip install graphify-mcp
 
 **Install:**
 ```bash
-npx -y @colbymchenry/codegraph
+npm install -g @colbymchenry/codegraph
+codegraph serve --mcp
 ```
+
+A bare `npx -y @colbymchenry/codegraph` invocation does **not** start an MCP
+server; it prints CLI help and hangs, which Opencode reports as a 30s startup
+timeout. The `serve --mcp` subcommand is required.
 
 **Verdict:** Strong alternative if you want function-level graph with proven token savings.
 
@@ -192,8 +207,11 @@ npx -y @colbymchenry/codegraph
 
 **Install:**
 ```bash
-npx -y @zilliztech/claude-context
+npx -y @zilliz/claude-context-mcp
 ```
+
+Requires a Zilliz Cloud account for the embedding backend, so it is registered
+`disabled: true` until credentials exist.
 
 **Verdict:** Install if you prefer semantic search over graph queries.
 
