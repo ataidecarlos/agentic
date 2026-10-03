@@ -1,17 +1,17 @@
-# deploy.ps1 — Deploy agents, skills, prompts, MCP servers and AGENTS.md to Opencode
+# deploy.ps1 — Deploy agents, skills, prompts, managed config and AGENTS.md to Opencode
 #
 # Usage:
 #   .\deploy.ps1                    # Deploy to user-global (~/.config/opencode/)
 #   .\deploy.ps1 -Project .         # Deploy to current project (.opencode/)
-#   .\deploy.ps1 -NoMcp             # Skip the MCP server merge
+#   .\deploy.ps1 -NoConfig          # Skip the managed config merge (MCP, skills, plugins)
 #   .\deploy.ps1 -NoPrompts         # Skip prompt -> command deployment
 #
 # The deployment is idempotent: running it twice produces the same result and
-# never duplicates the AGENTS.md block or the MCP server entries.
+# never duplicates the AGENTS.md block or any managed config entry.
 
 param(
     [string]$Project,
-    [switch]$NoMcp,
+    [switch]$NoConfig,
     [switch]$NoPrompts
 )
 
@@ -21,12 +21,23 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentsDir = Join-Path $ScriptDir "agents"
 $SkillsDir = Join-Path $ScriptDir "skills"
 $PromptsDir = Join-Path $ScriptDir "prompts"
-$McpSnippet = Join-Path $ScriptDir "mcp/agentic.opencode.json"
+$ConfigSnippet = Join-Path $ScriptDir "config/agentic.opencode.json"
 $AgentsMd = Join-Path $ScriptDir "AGENTS.md"
 
 # Markers used to replace (rather than append) our AGENTS.md block.
 $BeginMarker = "<!-- agentic:begin -->"
 $EndMarker = "<!-- agentic:end -->"
+
+# External checkouts referenced by the managed config. These are plugin/skill
+# repositories that are NOT vendored in this repo, so the deployment ensures a
+# checkout exists and points the config at it.
+$ExternalCheckouts = @(
+    @{
+        Name = "understand-anything"
+        Dir  = Join-Path $env:USERPROFILE ".understand-anything/repo"
+        Url  = "https://github.com/Egonex-AI/Understand-Anything.git"
+    }
+)
 
 # Validate source directories exist
 foreach ($Required in @(
@@ -40,12 +51,12 @@ foreach ($Required in @(
     }
 }
 
-$UsingMcp = $false
-if (-not $NoMcp) {
-    if (Test-Path -LiteralPath $McpSnippet) {
-        $UsingMcp = $true
+$UsingConfig = $false
+if (-not $NoConfig) {
+    if (Test-Path -LiteralPath $ConfigSnippet) {
+        $UsingConfig = $true
     } else {
-        Write-Warning "MCP snippet not found, skipping MCP merge: $McpSnippet"
+        Write-Warning "Config snippet not found, skipping managed config merge: $ConfigSnippet"
     }
 }
 
@@ -298,68 +309,150 @@ function ConvertTo-SortedOrdered {
     return $Value
 }
 
-$McpCount = 0
-if ($UsingMcp) {
-    # -AsHashtable so the servers object exposes .Keys; ConvertFrom-Json without
-    # it yields PSCustomObject, whose property names are not enumerable that way.
-    $Snippet = ConvertFrom-Json (Get-Content -LiteralPath $McpSnippet -Raw) -AsHashtable
-    $SnippetServers = $Snippet["mcp"]["servers"]
-    if ($null -eq $SnippetServers) {
-        Write-Warning "Snippet has no mcp.servers object, skipping: $McpSnippet"
+function Merge-ArrayEntry {
+    <#
+      Union a snippet array into the target array, preserving order. Order is
+      significant for `skills` (later entries win) and `plugins`, so entries are
+      appended rather than sorted.
+    #>
+    param($Existing, $Incoming)
+
+    $Result = @()
+    foreach ($Item in @($Existing)) { if ($null -ne $Item) { $Result += $Item } }
+    foreach ($Item in @($Incoming)) {
+        if ($null -ne $Item -and $Result -notcontains $Item) { $Result += $Item }
+    }
+    # The leading comma is required: PowerShell unrolls a single-element array
+    # on return, which would serialise a one-entry list as a bare scalar and make
+    # the whole config key invalid. The caller casts back to [object[]] so the
+    # list is not nested inside itself.
+    return , $Result
+}
+
+# ---------------------------------------------------------------------------
+# External checkouts
+#
+# Some skill sources are separate plugin repositories rather than directories in
+# this repo. The managed config points at them by path, so make sure a checkout
+# actually exists. An existing checkout is never modified; update it yourself so
+# a deployment can never move your dependency versions under you.
+# ---------------------------------------------------------------------------
+foreach ($Checkout in $ExternalCheckouts) {
+    if (Test-Path -LiteralPath (Join-Path $Checkout.Dir ".git")) {
+        Write-Host "  Checkout: $($Checkout.Name) present at $($Checkout.Dir)" -ForegroundColor Green
+    } elseif (Test-Path -LiteralPath $Checkout.Dir) {
+        Write-Warning "Checkout: $($Checkout.Dir) exists but is not a git clone; skipping. Remove it and re-run, or clone $($Checkout.Url) manually."
     } else {
-        $TargetConfig = $null
-        foreach ($Candidate in @("opencode.jsonc", "opencode.json")) {
-            $CandidatePath = Join-Path $TargetBase $Candidate
-            if (Test-Path -LiteralPath $CandidatePath) { $TargetConfig = $CandidatePath; break }
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-Warning "Checkout: git not found, cannot clone $($Checkout.Name). Clone $($Checkout.Url) to $($Checkout.Dir) manually."
+            continue
         }
-
-        if ($null -eq $TargetConfig) {
-            $TargetConfig = Join-Path $TargetBase "opencode.jsonc"
-            Set-Content -LiteralPath $TargetConfig -Value "{}" -NoNewline
-            Write-Host "  MCP: Created $TargetConfig" -ForegroundColor Yellow
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Checkout.Dir) | Out-Null
+        Write-Host "  Checkout: cloning $($Checkout.Name) -> $($Checkout.Dir)" -ForegroundColor Yellow
+        & git clone --depth 1 $Checkout.Url $Checkout.Dir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Checkout: clone of $($Checkout.Name) failed; its skills will not load until this is resolved."
         }
-
-        $RawText = Get-Content -LiteralPath $TargetConfig -Raw
-        $HadComments = $RawText -match '(?m)^\s*//' -or $RawText.Contains('/*')
-        $Config = ConvertTo-HashtableDeep (Remove-JsonComments $RawText | ConvertFrom-Json -AsHashtable)
-
-        if ($null -eq $Config) { $Config = @{} }
-        if ($null -eq $Config["mcp"]) { $Config["mcp"] = @{} }
-        if ($null -eq $Config["mcp"]["servers"]) { $Config["mcp"]["servers"] = @{} }
-
-        foreach ($Name in $SnippetServers.Keys) {
-            $Config["mcp"]["servers"][$Name] = $SnippetServers[$Name]
-            Write-Host "  MCP: $Name" -ForegroundColor Green
-            $McpCount++
-        }
-
-        $BackupPath = "$TargetConfig.bak"
-        Copy-Item -LiteralPath $TargetConfig -Destination $BackupPath -Force
-
-        # Recursively sort object keys. PowerShell hashtable enumeration order is
-        # not guaranteed, so sorting at every level (arrays keep their order) is
-        # what makes the written file byte-stable across runs and reviewable in
-        # version control.
-        $Json = (ConvertTo-SortedOrdered $Config) | ConvertTo-Json -Depth 20
-        Set-Content -LiteralPath $TargetConfig -Value ($Json + "`n") -NoNewline
-
-        if ($HadComments) {
-            Write-Warning "MCP: $TargetConfig contained comments; they were stripped by the JSONC merge. Original saved at $BackupPath"
-        }
-        Write-Host "  MCP: Merged $McpCount server(s) into $TargetConfig" -ForegroundColor Green
     }
 }
 
+# ---------------------------------------------------------------------------
+# Managed config (MCP servers, skill sources, plugins)
+#
+# OpenCode loads exactly one extra config file (OPENCODE_CONFIG), so these must
+# be merged into the target's own opencode.json(c). The merge is scoped: only
+# keys present in the snippet are touched, and everything else in the target
+# config is preserved.
+# ---------------------------------------------------------------------------
+$ServerCount = 0
+$SkillPathCount = 0
+$PluginCount = 0
+if ($UsingConfig) {
+    # -AsHashtable so objects expose .Keys; ConvertFrom-Json without it yields
+    # PSCustomObject, whose property names are not enumerable that way.
+    $Snippet = ConvertFrom-Json (Get-Content -LiteralPath $ConfigSnippet -Raw) -AsHashtable
+
+    $TargetConfig = $null
+    foreach ($Candidate in @("opencode.jsonc", "opencode.json")) {
+        $CandidatePath = Join-Path $TargetBase $Candidate
+        if (Test-Path -LiteralPath $CandidatePath) { $TargetConfig = $CandidatePath; break }
+    }
+
+    if ($null -eq $TargetConfig) {
+        $TargetConfig = Join-Path $TargetBase "opencode.jsonc"
+        Set-Content -LiteralPath $TargetConfig -Value "{}" -NoNewline
+        Write-Host "  Config: Created $TargetConfig" -ForegroundColor Yellow
+    }
+
+    $RawText = Get-Content -LiteralPath $TargetConfig -Raw
+    $HadComments = $RawText -match '(?m)^\s*//' -or $RawText.Contains('/*')
+    $Config = ConvertTo-HashtableDeep (Remove-JsonComments $RawText | ConvertFrom-Json -AsHashtable)
+    if ($null -eq $Config) { $Config = @{} }
+
+    # MCP servers, merged by name.
+    $SnippetServers = $null
+    if ($null -ne $Snippet["mcp"]) { $SnippetServers = $Snippet["mcp"]["servers"] }
+    if ($null -ne $SnippetServers) {
+        if ($null -eq $Config["mcp"]) { $Config["mcp"] = @{} }
+        if ($null -eq $Config["mcp"]["servers"]) { $Config["mcp"]["servers"] = @{} }
+        foreach ($Name in $SnippetServers.Keys) {
+            $Config["mcp"]["servers"][$Name] = $SnippetServers[$Name]
+            Write-Host "  MCP: $Name" -ForegroundColor Green
+            $ServerCount++
+        }
+    }
+
+    # Extra skill sources (directories or HTTP catalogs) and plugins, merged as
+    # ordered unions so pre-existing entries keep their precedence.
+    #
+    # NOTE: the key is `plugin` (singular) on V1-line OpenCode builds. Builds
+    # that follow the V2 config guide expect `plugins`, and reject the singular
+    # form. Probe your build before assuming either spelling.
+    foreach ($Key in @("skills", "plugin")) {
+        $Incoming = $Snippet[$Key]
+        if ($null -eq $Incoming) { continue }
+        $Before = @($Config[$Key])
+        # Cast rather than wrap in @(): the function already returns the array as
+        # a single object, so @() around it would nest the list inside itself.
+        $Merged = [object[]](Merge-ArrayEntry $Before $Incoming)
+        $Config[$Key] = $Merged
+        $Added = $Merged.Count - $Before.Count
+        foreach ($Entry in $Merged) {
+            if ($Before -notcontains $Entry) {
+                Write-Host "  ${Key}: $Entry" -ForegroundColor Green
+            }
+        }
+        if ($Key -eq "skills") { $SkillPathCount += $Added }
+        if ($Key -eq "plugin") { $PluginCount += $Added }
+    }
+
+    Copy-Item -LiteralPath $TargetConfig -Destination "$TargetConfig.bak" -Force
+
+    # Recursively sort object keys. PowerShell hashtable enumeration order is
+    # not guaranteed, so sorting at every level (arrays keep their order) is
+    # what makes the written file byte-stable across runs and reviewable in
+    # version control.
+    $Json = (ConvertTo-SortedOrdered $Config) | ConvertTo-Json -Depth 20
+    Set-Content -LiteralPath $TargetConfig -Value ($Json + "`n") -NoNewline
+
+    if ($HadComments) {
+        Write-Warning "Config: $TargetConfig contained comments; they were stripped by the JSONC merge. Original saved at $TargetConfig.bak"
+    }
+    Write-Host "  Config: Merged into $TargetConfig" -ForegroundColor Green
+}
+
 Write-Host ""
-Write-Host "Deployed $AgentCount agent(s), $SkillCount skill(s), $PromptCount prompt(s), $McpCount MCP server(s), and AGENTS.md" -ForegroundColor Green
+Write-Host "Deployed $AgentCount agent(s), $SkillCount skill(s), $PromptCount prompt(s), $ServerCount MCP server(s), and AGENTS.md" -ForegroundColor Green
 Write-Host "Agents:  $TargetAgentsDir" -ForegroundColor Yellow
 Write-Host "Skills:  $TargetSkillsDir" -ForegroundColor Yellow
 if ($UsingPrompts) { Write-Host "Commands: $(Join-Path $TargetBase 'commands')" -ForegroundColor Yellow }
-if ($UsingMcp) { Write-Host "MCP:     $(Join-Path $TargetBase 'opencode.jsonc')" -ForegroundColor Yellow }
+if ($UsingConfig) { Write-Host "Config:  $(Join-Path $TargetBase 'opencode.jsonc')" -ForegroundColor Yellow }
 Write-Host "AGENTS.md: $TargetAgentsMd" -ForegroundColor Yellow
 
 if ($EmptySkillDirs.Count -gt 0) {
     Write-Host ""
     Write-Warning "Unpopulated skill directories skipped: $($EmptySkillDirs -join ', ')"
-    Write-Warning "These are committed as gitlinks without a .gitmodules entry, so a fresh clone gets empty directories."
+    Write-Warning "A skill directory with no SKILL.md is either an unpopulated git submodule or a"
+    Write-Warning "multi-skill plugin repository. Run 'git submodule update --init --recursive',"
+    Write-Warning "or point the config's skills array at the repository's skills/ directory."
 }

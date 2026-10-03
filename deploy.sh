@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# deploy.sh — Deploy agents, skills, prompts, MCP servers and AGENTS.md to Opencode
+# deploy.sh — Deploy agents, skills, prompts, managed config and AGENTS.md to Opencode
 #
 # Usage:
 #   ./deploy.sh                    # Deploy to user-global (~/.config/opencode/)
 #   ./deploy.sh --project .        # Deploy to current project (.opencode/)
-#   ./deploy.sh --no-mcp           # Skip the MCP server merge
+#   ./deploy.sh --no-config        # Skip the managed config merge (MCP, skills, plugin)
 #   ./deploy.sh --no-prompts       # Skip prompt -> command deployment
 #
 # The deployment is idempotent: running it twice produces the same result and
-# never duplicates the AGENTS.md block or the MCP server entries.
+# never duplicates the AGENTS.md block or any managed config entry.
 
 set -euo pipefail
 
@@ -16,34 +16,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_DIR="$SCRIPT_DIR/agents"
 SKILLS_DIR="$SCRIPT_DIR/skills"
 PROMPTS_DIR="$SCRIPT_DIR/prompts"
-MCP_SNIPPET="$SCRIPT_DIR/mcp/agentic.opencode.json"
+CONFIG_SNIPPET="$SCRIPT_DIR/config/agentic.opencode.json"
 AGENTS_MD="$SCRIPT_DIR/AGENTS.md"
 
 # Markers used to replace (rather than append) our AGENTS.md block.
 BEGIN_MARKER="<!-- agentic:begin -->"
 END_MARKER="<!-- agentic:end -->"
 
+# External checkouts referenced by the managed config. These are plugin/skill
+# repositories that are NOT vendored in this repo, so the deployment ensures a
+# checkout exists and points the config at it.
+UNDERSTAND_ANYWHERE_DIR="${UA_DIR:-$HOME/.understand-anything/repo}"
+UNDERSTAND_ANYWHERE_URL="${UA_REPO_URL:-https://github.com/Egonex-AI/Understand-Anything.git}"
+
 # Validate source directories exist
 [[ -d "$AGENTS_DIR" ]] || { echo "Error: Agents directory not found: $AGENTS_DIR" >&2; exit 1; }
 [[ -d "$SKILLS_DIR" ]] || { echo "Error: Skills directory not found: $SKILLS_DIR" >&2; exit 1; }
 [[ -f "$AGENTS_MD"   ]] || { echo "Error: AGENTS.md not found: $AGENTS_MD" >&2; exit 1; }
 
-USE_MCP=1
-if [[ "${1:-}" == "--no-mcp" ]]; then
-    USE_MCP=0
-elif [[ -f "$MCP_SNIPPET" ]]; then
-    :
-else
-    echo "Warning: MCP snippet not found, skipping MCP merge: $MCP_SNIPPET" >&2
-    USE_MCP=0
-fi
-
+USE_CONFIG=1
 USE_PROMPTS=1
-if [[ "${1:-}" == "--no-prompts" ]]; then
-    USE_PROMPTS=0
-elif [[ -d "$PROMPTS_DIR" ]]; then
-    :
-else
+for ARG in "$@"; do
+    case "$ARG" in
+        --no-config)  USE_CONFIG=0 ;;
+        --no-prompts) USE_PROMPTS=0 ;;
+    esac
+done
+
+if [[ "$USE_CONFIG" == "1" && ! -f "$CONFIG_SNIPPET" ]]; then
+    echo "Warning: Config snippet not found, skipping managed config merge: $CONFIG_SNIPPET" >&2
+    USE_CONFIG=0
+fi
+if [[ "$USE_PROMPTS" == "1" && ! -d "$PROMPTS_DIR" ]]; then
     echo "Warning: Prompts directory not found, skipping prompt deployment: $PROMPTS_DIR" >&2
     USE_PROMPTS=0
 fi
@@ -56,7 +60,7 @@ while [[ $# -gt 0 ]]; do
             PROJECT="$2"
             shift 2
             ;;
-        --no-mcp|--no-prompts)
+        --no-config|--no-prompts)
             shift
             ;;
         *)
@@ -260,15 +264,36 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# MCP servers
+# External checkouts
 #
-# Opencode loads exactly one extra config file (OPENCODE_CONFIG), so MCP servers
-# must be merged into the target's own opencode.json(c). The merge is
-# name-scoped: only keys defined in mcp/agentic.opencode.json are written, and
-# everything else in the target config is preserved.
+# Some skill sources are separate plugin repositories rather than directories in
+# this repo. The managed config points at them by path, so make sure a checkout
+# actually exists. An existing checkout is never modified; update it yourself so
+# a deployment can never move your dependency versions under you.
 # ---------------------------------------------------------------------------
-MCP_COUNT=0
-if [[ "$USE_MCP" == "1" ]]; then
+if [[ -d "$UNDERSTAND_ANYWHERE_DIR/.git" ]]; then
+    echo "  Checkout: understand-anything present at $UNDERSTAND_ANYWHERE_DIR"
+elif [[ -d "$UNDERSTAND_ANYWHERE_DIR" ]]; then
+    echo "Warning: Checkout: $UNDERSTAND_ANYWHERE_DIR exists but is not a git clone; skipping. Remove it and re-run, or clone $UNDERSTAND_ANYWHERE_URL manually." >&2
+elif ! command -v git >/dev/null 2>&1; then
+    echo "Warning: Checkout: git not found, cannot clone understand-anything. Clone $UNDERSTAND_ANYWHERE_URL to $UNDERSTAND_ANYWHERE_DIR manually." >&2
+else
+    echo "  Checkout: cloning understand-anything -> $UNDERSTAND_ANYWHERE_DIR"
+    mkdir -p "$(dirname "$UNDERSTAND_ANYWHERE_DIR")"
+    git clone --depth 1 "$UNDERSTAND_ANYWHERE_URL" "$UNDERSTAND_ANYWHERE_DIR" \
+        || echo "Warning: Checkout: clone of understand-anything failed; its skills will not load until this is resolved." >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Managed config (MCP servers, skill sources, plugins)
+#
+# Opencode loads exactly one extra config file (OPENCODE_CONFIG), so these must
+# be merged into the target's own opencode.json(c). The merge is scoped: only
+# keys present in the snippet are touched, and everything else in the target
+# config is preserved.
+# ---------------------------------------------------------------------------
+SERVER_COUNT=0
+if [[ "$USE_CONFIG" == "1" ]]; then
     TARGET_CONFIG=""
     for CANDIDATE in "$TARGET_BASE/opencode.jsonc" "$TARGET_BASE/opencode.json"; do
         if [[ -f "$CANDIDATE" ]]; then TARGET_CONFIG="$CANDIDATE"; break; fi
@@ -276,18 +301,23 @@ if [[ "$USE_MCP" == "1" ]]; then
     if [[ -z "$TARGET_CONFIG" ]]; then
         TARGET_CONFIG="$TARGET_BASE/opencode.jsonc"
         printf '{}' > "$TARGET_CONFIG"
-        echo "  MCP: Created $TARGET_CONFIG"
+        echo "  Config: Created $TARGET_CONFIG"
     fi
 
     cp -f "$TARGET_CONFIG" "$TARGET_CONFIG.bak"
 
     if grep -qE '(^[[:space:]]*//|/\*)' "$TARGET_CONFIG"; then
-        echo "Warning: MCP: $TARGET_CONFIG contained comments; they were stripped by the JSONC merge. Original saved at $TARGET_CONFIG.bak" >&2
+        echo "Warning: Config: $TARGET_CONFIG contained comments; they were stripped by the JSONC merge. Original saved at $TARGET_CONFIG.bak" >&2
     fi
 
     # Node is guaranteed present wherever Opencode runs, and it parses JSONC
-    # reliably. Keys are sorted so the output is stable across runs.
-    MCP_COUNT="$(node -e '
+    # reliably. Object keys are sorted recursively so the output is byte-stable;
+    # arrays keep their order because precedence depends on it.
+    #
+    # NOTE: the plugin key is `plugin` (singular) on V1-line OpenCode builds.
+    # Builds following the V2 config guide expect `plugins` and reject the
+    # singular form. Probe your build before assuming either spelling.
+    MERGE_REPORT="$(node -e '
 const fs = require("fs");
 const [snippetPath, targetPath] = process.argv.slice(1);
 const strip = (t) => t
@@ -295,36 +325,70 @@ const strip = (t) => t
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/(^|[^:"'"'"'\\])\/\/.*$/gm, "$1")
   .replace(/,(\s*[}\]])/g, "$1");
+const sortDeep = (v) => {
+  if (Array.isArray(v)) return v.map(sortDeep);
+  if (v && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = sortDeep(v[k]);
+    return out;
+  }
+  return v;
+};
 const snippet = JSON.parse(fs.readFileSync(snippetPath, "utf8"));
 let target = {};
 try { target = JSON.parse(strip(fs.readFileSync(targetPath, "utf8"))); } catch (e) {}
 if (!target || typeof target !== "object" || Array.isArray(target)) target = {};
+const report = [];
+
+// MCP servers, merged by name.
+const servers = (snippet.mcp && snippet.mcp.servers) || {};
 target.mcp = target.mcp && typeof target.mcp === "object" ? target.mcp : {};
 target.mcp.servers = target.mcp.servers && typeof target.mcp.servers === "object" ? target.mcp.servers : {};
-for (const [name, def] of Object.entries(snippet.mcp.servers)) target.mcp.servers[name] = def;
-const sorted = {};
-for (const k of Object.keys(target).sort()) sorted[k] = target[k];
-fs.writeFileSync(targetPath, JSON.stringify(sorted, null, 2) + "\n");
-console.log(Object.keys(snippet.mcp.servers).length);
-' "$MCP_SNIPPET" "$TARGET_CONFIG")"
+for (const [name, def] of Object.entries(servers)) {
+  target.mcp.servers[name] = def;
+  report.push(["mcp", name]);
+}
 
-    while IFS= read -r NAME; do
-        echo "  MCP: $NAME"
-    done < <(node -e 'const s=require(process.argv[1]);console.log(Object.keys(s.mcp.servers).join("\n"))' "$MCP_SNIPPET")
+// Arrays are unioned, preserving order: later entries win for skills and plugins.
+for (const key of ["skills", "plugin"]) {
+  const incoming = snippet[key];
+  if (!Array.isArray(incoming)) continue;
+  const before = Array.isArray(target[key]) ? target[key] : [];
+  const merged = before.slice();
+  for (const entry of incoming) if (!merged.includes(entry)) merged.push(entry);
+  target[key] = merged;
+  for (const entry of merged) if (!before.includes(entry)) report.push([key, entry]);
+}
 
-    echo "  MCP: Merged $MCP_COUNT server(s) into $TARGET_CONFIG"
+fs.writeFileSync(targetPath, JSON.stringify(sortDeep(target), null, 2) + "\n");
+console.log(JSON.stringify({ servers: Object.keys(servers).length, report }));
+' "$CONFIG_SNIPPET" "$TARGET_CONFIG")"
+
+    SERVER_COUNT="$(node -e 'console.log(JSON.parse(process.argv[1]).servers)' "$MERGE_REPORT")"
+    while IFS= read -r LINE; do
+        KEY="${LINE%%|*}"
+        VALUE="${LINE#*|}"
+        printf "  %s: %s\n" "$KEY" "$VALUE"
+    done < <(node -e '
+const r = JSON.parse(process.argv[1]);
+for (const [k, v] of r.report) console.log(k + "|" + v);
+' "$MERGE_REPORT")
+
+    echo "  Config: Merged into $TARGET_CONFIG"
 fi
 
 echo ""
-echo "Deployed $AGENT_COUNT agent(s), $SKILL_COUNT skill(s), $PROMPT_COUNT prompt(s), $MCP_COUNT MCP server(s), and AGENTS.md"
+echo "Deployed $AGENT_COUNT agent(s), $SKILL_COUNT skill(s), $PROMPT_COUNT prompt(s), $SERVER_COUNT MCP server(s), and AGENTS.md"
 echo "Agents:  $TARGET_AGENTS_DIR"
 echo "Skills:  $TARGET_SKILLS_DIR"
 if [[ "$USE_PROMPTS" == "1" ]]; then echo "Commands: $TARGET_BASE/commands"; fi
-if [[ "$USE_MCP" == "1" ]]; then echo "MCP:     $TARGET_BASE/opencode.jsonc"; fi
+if [[ "$USE_CONFIG" == "1" ]]; then echo "Config:  $TARGET_BASE/opencode.jsonc"; fi
 echo "AGENTS.md: $TARGET_AGENTS_MD"
 
 if [[ ${#EMPTY_SKILL_DIRS[@]} -gt 0 ]]; then
     echo ""
     echo "Warning: Unpopulated skill directories skipped: ${EMPTY_SKILL_DIRS[*]}" >&2
-    echo "Warning: These are committed as gitlinks without a .gitmodules entry, so a fresh clone gets empty directories." >&2
+    echo "Warning: A skill directory with no SKILL.md is either an unpopulated git submodule or a" >&2
+    echo "Warning: multi-skill plugin repository. Run 'git submodule update --init --recursive'," >&2
+    echo "Warning: or point the config skills array at the skills/ directory of that repository." >&2
 fi

@@ -1,0 +1,4 @@
+[submodule "stop-slop"]
+	path = skills/stop-slop
+	url = https://github.com/hardikpandya/stop-slop.git
+	branch = main

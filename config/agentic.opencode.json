@@ -36,5 +36,11 @@
         "disabled": true
       }
     }
-  }
+  },
+  "skills": [
+    "~/.understand-anything/repo/understand-anything-plugin/skills"
+  ],
+  "plugin": [
+    "superpowers@git+https://github.com/obra/superpowers.git"
+  ]
 }

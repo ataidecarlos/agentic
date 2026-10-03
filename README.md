@@ -9,7 +9,7 @@ Four deliverables, one relationship:
 - `prompts/<agent-name>.md` — the canonical portable prompt. Harness-agnostic prose.
 - `agents/<agent-name>.md` — the Opencode agent. Frontmatter + verbatim prompt body.
 - `skills/<skill-name>/SKILL.md` — the OpenCode skill. Frontmatter + instructions.
-- `mcp/agentic.opencode.json` — the MCP servers the deployment installs.
+- `config/agentic.opencode.json` — the MCP servers, skill sources and plugins the deployment installs.
 
 The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body.
 
@@ -148,11 +148,9 @@ agentic/
 │   │   └── agents/openai.yaml
 │   ├── caveman/
 │   │   └── SKILL.md          # Caveman skill
-│   ├── obra-superpowers/     # Unpopulated gitlink — see below
-│   ├── stop-slop/            # Unpopulated gitlink — see below
-│   └── understand-anything/  # Unpopulated gitlink — see below
-├── mcp/
-│   └── agentic.opencode.json # MCP servers installed by the deploy scripts
+│   └── stop-slop/            # Git submodule: hardikpandya/stop-slop
+├── config/
+│   └── agentic.opencode.json # MCP servers, skill sources, plugins
 ├── deploy.ps1                # PowerShell deployment script
 ├── deploy.sh                 # Bash deployment script
 ├── MCP.md                    # MCP server recommendations and install notes
@@ -170,19 +168,51 @@ agentic/
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
 | `skills/grill-me/SKILL.md` | Relentless interview to sharpen a plan or design. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
-| `mcp/agentic.opencode.json` | MCP servers merged into the target Opencode config. |
+| `skills/stop-slop` | Git submodule for `hardikpandya/stop-slop`. |
+| `config/agentic.opencode.json` | Managed config merged into the target Opencode config. |
 | `AGENTS.md` | Project instructions. Instructs agents to load persistent memory at session start. |
 
-### Unpopulated skill gitlinks
+### Skills from other repositories
 
-`skills/obra-superpowers`, `skills/stop-slop`, and `skills/understand-anything`
-are committed as gitlinks (mode `160000`) but the repository has **no
-`.gitmodules` file**. A fresh clone therefore produces empty directories, and
-both deploy scripts skip them with a warning instead of failing.
+Three well-known skills were originally committed here as bare symlinks
+(`skills/obra-superpowers`, `skills/stop-slop`, `skills/understand-anything`).
+That could never work: the repo had no `.gitmodules`, so a clone produced empty
+directories, and two of the three are multi-skill **plugin** repositories with
+no root `SKILL.md` at all. They are now integrated the way each one actually
+expects:
 
-To fix, either add a `.gitmodules` entry for each so `git submodule update
---init --recursive` populates them, or remove the gitlinks. Until then, run
-`codegraph`-free discovery the usual way — those three skills are not installed.
+| Skill | Source | Mechanism |
+|---|---|---|
+| `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | Git submodule. The repo root is a single skill (`SKILL.md` + `references/`), so it drops straight into `skills/`. |
+| Superpowers (15 skills) | [obra/superpowers](https://github.com/obra/superpowers) | Opencode **plugin**, via the `plugin` config key. Ships its own OpenCode support in `.opencode/INSTALL.md`. |
+| Understand Anything (9 skills) | [Egonex-AI/Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) | External checkout plus a `skills` config entry pointing at its `understand-anything-plugin/skills` directory. |
+
+Init the submodule after cloning:
+
+```sh
+git submodule update --init --recursive
+```
+
+Superpowers and Understand Anything are **not** submodules: both are large
+multi-harness plugin repositories whose skills live in nested directories, and
+Superpowers needs its bootstrap injection to work. Vendoring them would pin them
+to a commit and skip upstream's cross-harness tooling.
+
+`Egonex-AI/Understand-Anything` was formerly `Lum1104/Understand-Anything`; GitHub
+redirects the old name, so either URL resolves.
+
+### Plugin config key
+
+The managed config uses **`plugin`** (singular). V1-line Opencode builds accept
+the singular form and reject `plugins`; builds following the V2 config guide
+expect `plugins`. If a plugin silently fails to load, check which spelling your
+build wants:
+
+```sh
+grep -i 'normalization diagnostic' ~/.local/share/opencode/log/opencode.log
+```
+
+A rejected key is reported as `path=$.plugin kind=invalid action="skipped"`.
 
 ## Deployment
 
@@ -212,18 +242,18 @@ The scripts deploy:
 - **Agents** to `~/.config/opencode/agents/` (global) or `<project>/.opencode/agents/` (per-project)
 - **Skills** to `~/.config/opencode/skills/` (global) or `<project>/.opencode/skills/` (per-project)
 - **Prompts** to `~/.config/opencode/commands/` (global) or `<project>/.opencode/commands/` (per-project), so each prompt becomes a slash command (`prompts/plan-mode.md` → `/plan-mode`)
-- **MCP servers** merged from `mcp/agentic.opencode.json` into `~/.config/opencode/opencode.jsonc` (global) or `<project>/.opencode/opencode.jsonc` (per-project)
+- **MCP servers, skill sources and plugins** merged from `config/agentic.opencode.json` into `~/.config/opencode/opencode.jsonc` (global) or `<project>/.opencode/opencode.jsonc` (per-project)
 - **AGENTS.md** to `~/.config/opencode/AGENTS.md` (global) or `<project>/.opencode/AGENTS.md` (per-project)
 
 Skip a section when you only want part of the deployment:
 
 ```powershell
-.\deploy.ps1 -NoMcp
+.\deploy.ps1 -NoConfig
 .\deploy.ps1 -NoPrompts
 ```
 
 ```bash
-./deploy.sh --no-mcp
+./deploy.sh --no-config
 ./deploy.sh --no-prompts
 ```
 
@@ -239,18 +269,20 @@ global config directory is shared state that other tools also write to.
   which duplicated the whole block on every run; that legacy block is migrated
   into the marked block on the first run of the new scripts.
 - **MCP servers** are merged by name. Only the keys defined in
-  `mcp/agentic.opencode.json` are written; every other setting in the target
+  `config/agentic.opencode.json` are written; every other setting in the target
   config is preserved, including legacy servers declared directly under `mcp`.
-  Object keys are sorted recursively so the written file is byte-stable across
-  runs and reviewable in version control. The previous file is saved as
-  `<config>.bak`.
+- **`skills` and `plugin`** are merged as ordered unions: your existing entries
+  keep their precedence and new ones are appended. Order matters for both.
+- Object keys are sorted recursively so the written file is byte-stable across
+  runs and reviewable in version control. Arrays keep their order. The previous
+  file is saved as `<config>.bak`.
 
-### MCP server merge
+### Managed config merge
 
 OpenCode loads exactly one extra config file, selected by the `OPENCODE_CONFIG`
 environment variable. Dropping a second `*.opencode.json` file into the global
-config directory does nothing — it is silently ignored. MCP servers therefore
-have to be merged into the target's own `opencode.json(c)`.
+config directory does nothing — it is silently ignored. Everything the snippet
+declares therefore has to be merged into the target's own `opencode.json(c)`.
 
 The merge is JSONC-aware: line and block comments are stripped before parsing
 and the file is rewritten as plain JSON. If the target contained comments, the
@@ -259,9 +291,21 @@ script warns you and the original is preserved at `<config>.bak`.
 Secrets are never written into the config. The GitHub server reads its token
 from `{env:GITHUB_PERSONAL_ACCESS_TOKEN}`.
 
+### External checkouts
+
+The deployment ensures the Understand Anything checkout exists at
+`~/.understand-anything/repo` (override with `UA_DIR` / `UA_REPO_URL`), because
+the managed `skills` entry points into it. **An existing checkout is never
+updated** — a deployment must not silently move your dependency versions. Update
+it yourself when you want to move:
+
+```sh
+git -C ~/.understand-anything/repo pull --ff-only
+```
+
 ### Servers registered disabled
 
-`mcp/agentic.opencode.json` ships two entries with `"disabled": true`:
+`config/agentic.opencode.json` ships two entries with `"disabled": true`:
 
 | Server | Why |
 |---|---|
@@ -270,6 +314,35 @@ from `{env:GITHUB_PERSONAL_ACCESS_TOKEN}`.
 
 Flip `"disabled"` to `false` (or use `/mcps` in the TUI) once the prerequisite
 exists. See `MCP.md` for prerequisites and corrected install commands.
+
+### Troubleshooting
+
+**A skill directory is skipped as "empty" or "SKILL.md not found".** Either the
+submodule is unpopulated (`git submodule update --init --recursive`) or it is a
+multi-skill plugin repository, which belongs in the config's `skills` array
+rather than in `skills/`.
+
+**A plugin or skill silently fails to load.** Check the server log for rejected
+config keys:
+
+```sh
+grep -i 'normalization diagnostic' ~/.local/share/opencode/log/opencode.log
+```
+
+`action="skipped"` with `kind=invalid` names the offending path. Note that
+`opencode mcp list` does **not** fully validate the config; start the server
+(`opencode serve`) to surface every diagnostic.
+
+**A git-backed plugin spec fails on Windows.** Upstream documents that some
+Windows builds mishandle `git+https` specs. Fall back to a local install and
+point the config at the absolute path (Opencode does not expand `~`):
+
+```powershell
+npm install superpowers@git+https://github.com/obra/superpowers.git --prefix "$HOME\.config\opencode"
+```
+
+then use `C:\Users\<you>\.config\opencode\node_modules\superpowers` as the
+`plugin` entry.
 
 ### AGENTS.md Deployment Behavior
 

@@ -68,8 +68,8 @@ Do not suggest hindsight for straightforward implementations, non-implementation
 agentic/
 ├── prompts/          # Canonical portable prompts
 ├── agents/           # Opencode agents (frontmatter + prompt body)
-├── skills/           # Opencode skills
-├── mcp/              # MCP servers installed by the deploy scripts
+├── skills/           # Opencode skills (one dir per skill, plus git submodules)
+├── config/           # Managed config: MCP servers, skill sources, plugins
 ├── deploy.ps1        # PowerShell deployment script
 ├── deploy.sh         # Bash deployment script
 └── AGENTS.md         # This file
@@ -89,12 +89,33 @@ config directory is shared state that other tools also write to.
   Do not spell the full marker strings out anywhere inside this file — the
   deploy scripts locate the block by matching them, and a second occurrence
   inside the content would truncate the match.
-- MCP servers are merged by name from `mcp/agentic.opencode.json` into the
+- MCP servers are merged by name from `config/agentic.opencode.json` into the
   target's own `opencode.json(c)`. OpenCode loads only one extra config file
   (selected by `OPENCODE_CONFIG`), so a second `*.opencode.json` file in the
   config directory is silently ignored.
+- `skills` and `plugin` entries are ordered unions. Never sort them; later
+  entries win.
 - When adding a skill, a prompt, or an MCP server, add it to the source tree so
   the deploy scripts pick it up. Never hand-edit the deployed copies.
+
+## Integrating skills from other repositories
+
+A repository is not a skill just because it is useful. Check its shape first:
+
+- **Single-skill repo** (a root `SKILL.md`): add it as a git submodule under
+  `skills/`.
+- **Multi-skill plugin repo** (skills nested in `skills/` or a plugin package):
+  do NOT put it under `skills/`. Either list its skills directory in the config
+  snippet's `skills` array, or install it as a plugin when the project ships
+  first-class support for this harness.
+
+OpenCode discovers `SKILL.md` at the root of each skill directory, so a
+nested-skill repository dropped there is silently skipped.
+
+Config key spellings differ by Opencode version and must be probed, not
+assumed. `plugin` (singular) works on V1-line builds; `plugins` is the V2 form.
+A rejected key is logged as a `configuration normalization diagnostic`, and
+`opencode mcp list` does not surface it — start the server to see it.
 
 ## Key Principles
 
