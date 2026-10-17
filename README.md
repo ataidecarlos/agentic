@@ -9,7 +9,7 @@ supporting skills for session-end self-improvement and compressed communication.
 Four kinds of object, one destination each. `INSTALL.md` maps them.
 
 - `agents/<name>.md` — an OpenCode agent: frontmatter plus its system prompt body.
-- `prompts/<name>.md` — a prompt template, installed as the command `/<name>`.
+- `commands/<name>.md` — a slash command, installed as `/<name>`.
 - `skills/<id>/SKILL.md` — an OpenCode skill. The directory name is the skill ID.
 - `config/agentic.opencode.json` — a config snippet to **merge**, not to copy.
 
@@ -34,9 +34,10 @@ Four things worth knowing before you edit anything here:
 
 - `agents/plan.md` is a 13-line override that hides OpenCode's built-in `plan`
   agent. It contains no planning instructions.
-- `agents/reviewer.md` and `prompts/reviewer.md` are different files of different
-  lengths. They are **not** kept in sync automatically.
-- `design` and `verifier` exist only as agents; they have no prompt counterpart.
+- `commands/` holds only commands that have no agent of their own. A command that
+  merely *invokes* an agent delegates with `agent:` instead of copying its prompt,
+  so there is no second copy to drift.
+- `design` and `verifier` exist only as agents; nothing invokes them as a command.
 - `design` is deliberately **not** hidden. The other four are.
 
 ## Skills
@@ -154,17 +155,16 @@ flowchart TD
 agent, so `design` is the only planning entry point. Delete it to restore the
 built-in.
 
-`/plan-mode` and `/reviewer` remain available as standalone commands for
-one-off use; they are not part of the pipeline.
+`/build` and `/reviewer` are the two commands. `/build` is how a grounded plan
+reaches implementation; `/reviewer` is a manual entry point to the reviewer.
 
 ## Layout
 
 ```
 agentic/
-├── prompts/
-│   ├── build.md              # /build — consume a validated plan
-│   ├── plan-mode.md          # Canonical Plan prompt (standalone /plan-mode)
-│   └── reviewer.md           # Canonical Reviewer prompt (standalone /reviewer)
+├── commands/
+│   ├── build.md              # /build — execute a validated plan
+│   └── reviewer.md           # /reviewer — delegates to the reviewer agent
 ├── agents/
 │   ├── design.md             # Primary: interrogate, brief, orchestrate the pipeline
 │   ├── planner.md            # Subagent: produce the plan
@@ -194,9 +194,8 @@ agentic/
 | Path | Purpose |
 |---|---|
 | `INSTALL.md` | **The installer.** Maps every object to its OpenCode v2 destination, and specifies the config merge. |
-| `prompts/build.md` | `/build` — executes a validated plan, runs its `## Verification`. |
-| `prompts/plan-mode.md` | Canonical Plan prompt, installed as the standalone `/plan-mode` command. |
-| `prompts/reviewer.md` | Canonical Reviewer prompt, installed as the standalone `/reviewer` command. |
+| `commands/build.md` | `/build` — executes a validated plan, runs its `## Verification`. |
+| `commands/reviewer.md` | `/reviewer` — delegates to the `reviewer` agent with `agent:`. Holds no review logic of its own. |
 | `agents/design.md` | Pipeline entry point. Primary, read-only. Interrogates, emits a brief, then dispatches planner → reviewer → verifier. |
 | `agents/planner.md` | Subagent. Produces the plan. Cannot dispatch other agents. |
 | `agents/reviewer.md` | Subagent. Judges the plan's soundness. Must APPROVE before the verifier runs. |
@@ -269,7 +268,7 @@ The mapping in short — `INSTALL.md` §1 has the per-project column:
 | Object | Global destination |
 |---|---|
 | `agents/<name>.md` | `~/.config/opencode/agents/` |
-| `prompts/<name>.md` | `~/.config/opencode/commands/`, invoked as `/<name>` |
+| `commands/<name>.md` | `~/.config/opencode/commands/`, invoked as `/<name>` |
 | `skills/<id>/` | `~/.config/opencode/skills/<id>/` |
 | `AGENTS.md` | `~/.config/opencode/AGENTS.md`, inside a marker pair |
 | `config/agentic.opencode.json` | merged into `~/.config/opencode/opencode.jsonc` |
@@ -408,10 +407,11 @@ with no plan in context it stops rather than inferring one from the surrounding
 conversation. It runs the plan's `## Verification` section and reports the real
 command and the real output, not a summary that it passed.
 
-### Standalone commands
+### Commands
 
-`/plan-mode` and `/reviewer` remain installed as commands for one-off use outside
-the pipeline. `/plan-mode` is the pre-pipeline planner prompt.
+`/reviewer` gives a one-off review without running the whole pipeline. It
+delegates to the `reviewer` agent rather than carrying a copy of its prompt.
+`/build` is described above.
 
 ### Hindsight Skill
 
@@ -445,15 +445,22 @@ appends ordered rules; the last matching rule wins.
 `design` denies `subagent` broadly and then re-allows three specific IDs, so rule
 order matters: broad rule first, exceptions after it.
 
-## Keeping prompts and agents in sync
+## Commands, and why they are not copies
 
-`prompts/<name>.md` installs to `/<name>` as a command; `agents/<name>.md` is the
-agent. They are separate files with separate bodies, and they have already
-drifted — `prompts/reviewer.md` (200 lines) is shorter than `agents/reviewer.md`
-(218 lines). Editing one does not update the other.
+`commands/` holds slash commands. Each is a separate file from any agent with a
+similar name, and editing one does not update the other.
 
-`agents/design.md` and `agents/verifier.md` have no prompt counterpart: the
-pipeline stages exist only as agents.
+Only two exist, and both earn their place:
+
+- `commands/build.md` — no agent can replace it, because `/build` is how a
+  grounded plan reaches implementation.
+- `commands/reviewer.md` — a four-line wrapper with `agent: reviewer`. It holds
+  **no** review logic; it invokes the agent. If it copied the agent's prompt
+  instead, the two would drift — which is exactly what happened to this repo's
+  old `prompts/plan-mode.md`, a 95-line copy of the planner prompt that kept
+  describing a review loop the planner had since been forbidden to run.
+
+`design` and `verifier` have no command; nothing invokes them that way.
 
 ## Behaviors & troubleshooting
 

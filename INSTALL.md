@@ -17,7 +17,7 @@ platform. On Windows that is `C:\Users\<you>\.config\opencode\`.
 | This repo | Global | Per project |
 |---|---|---|
 | `agents/<name>.md` | `~/.config/opencode/agents/<name>.md` | `<project>/.opencode/agents/<name>.md` |
-| `prompts/<name>.md` | `~/.config/opencode/commands/<name>.md` | `<project>/.opencode/commands/<name>.md` |
+| `commands/<name>.md` | `~/.config/opencode/commands/<name>.md` | `<project>/.opencode/commands/<name>.md` |
 | `skills/<id>/` | `~/.config/opencode/skills/<id>/` | `<project>/.opencode/skills/<id>/` |
 | `AGENTS.md` | `~/.config/opencode/AGENTS.md` | `<project>/AGENTS.md` |
 | `config/agentic.opencode.json` | merged into `~/.config/opencode/opencode.jsonc` | merged into `<project>/.opencode/opencode.jsonc` |
@@ -30,9 +30,10 @@ Three things in that table are easy to get wrong:
   stopping at the project root. A file at `<project>/.opencode/AGENTS.md` is only
   loaded if an agent happens to read inside `.opencode/`, which is not what you
   want for repository-wide guidance.
-- **A prompt becomes a command.** `prompts/build.md` installs as
-  `commands/build.md` and is invoked as `/build`. Only `.md` files are discovered.
-  Nested paths become slash-separated names.
+- **Only `.md` files are discovered as commands**, and the filename is the command
+  name: `commands/build.md` is `/build`. Nested paths become slash-separated
+  names. The source directory mirrors the destination, so nothing is renamed on
+  the way in.
 - **The directory name is the skill ID.** `skills/caveman/` is the skill
   `caveman`, and that is the exact, case-sensitive ID the model gets. Copy the
   **whole directory**, not just `SKILL.md` — supporting files such as
@@ -64,7 +65,7 @@ missing key.
 
 ## 3. Copy the files
 
-Everything in `agents/`, `prompts/` and `skills/` installs. Copy directory
+Everything in `agents/`, `commands/` and `skills/` installs. Copy directory
 contents rather than naming files individually, so a later addition is not
 silently missed.
 
@@ -74,7 +75,7 @@ POSIX:
 TARGET=~/.config/opencode
 mkdir -p "$TARGET"/agents "$TARGET"/commands "$TARGET"/skills
 cp agents/*.md  "$TARGET"/agents/
-cp prompts/*.md "$TARGET"/commands/
+cp commands/*.md "$TARGET"/commands/
 cp -R skills/.  "$TARGET"/skills/
 find "$TARGET"/skills -name .git -prune -exec rm -rf {} +
 cp AGENTS.md    "$TARGET"/AGENTS.md
@@ -86,7 +87,7 @@ PowerShell:
 $Target = "$env:USERPROFILE\.config\opencode"
 New-Item -ItemType Directory -Force $Target\agents, $Target\commands, $Target\skills | Out-Null
 Copy-Item agents\*.md  $Target\agents\
-Copy-Item prompts\*.md $Target\commands\
+Copy-Item commands\*.md $Target\commands\
 Get-ChildItem skills -Directory | ForEach-Object { Copy-Item $_.FullName $Target\skills\ -Recurse -Force }
 Get-ChildItem $Target\skills -Recurse -Force | Where-Object Name -eq '.git' | Remove-Item -Recurse -Force
 Copy-Item AGENTS.md    $Target\AGENTS.md
@@ -192,8 +193,8 @@ listings only, not launching, so `design` still dispatches its subagents by ID.
 `llm-council`, `stop-slop`, plus the `understand-*` set if you cloned it. If the
 list is empty, the `skills` entry was not merged.
 
-Commands cannot be verified from the CLI — check that `/build`, `/plan-mode` and
-`/reviewer` appear in the TUI's command list.
+Commands cannot be verified from the CLI — check that `/build` and `/reviewer`
+appear in the TUI's command list.
 
 If `debug agents` shows `plan` as visible, the install predates the design
 pipeline, or a stale `plan.md` is being picked up from an earlier install.
@@ -208,6 +209,23 @@ first install; only its merge rule is repeatable.
 To remove the installation, delete the copied files and the `agentic:begin` /
 `agentic:end` block from `AGENTS.md`. Leave the config merge alone unless you
 added nothing of your own to those keys.
+
+**A re-install does not prune.** Copying overwrites and adds; nothing deletes a
+file this repo has since removed. A renamed or deleted source file therefore
+leaves a stale agent, skill or command at the destination indefinitely — for
+example, a `/plan-mode` command from an older install keeps working long after
+`commands/plan-mode.md` stopped existing here. After updating, compare the source
+directories against the install and delete what has no counterpart left:
+
+```sh
+# names present at the destination but no longer in this repo
+comm -13 <(ls commands | sort) <(ls ~/.config/opencode/commands | sort)
+comm -13 <(ls agents   | sort) <(ls ~/.config/opencode/agents   | sort)
+ls ~/.config/opencode/skills
+```
+
+The same applies to `skills`: a skill removed here stays installed until its
+directory is deleted, and it keeps appearing in `/api/skill`.
 
 ## Not installed
 

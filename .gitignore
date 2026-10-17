@@ -7,3 +7,4 @@ target/
 # Editor / OS junk
 .DS_Store
 Thumbs.db
+.obsidian/

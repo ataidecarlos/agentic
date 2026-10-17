@@ -66,7 +66,7 @@ Do not suggest hindsight for straightforward implementations, non-implementation
 
 ```
 agentic/
-├── prompts/          # Canonical portable prompts (installed as /<name> commands)
+├── commands/         # Slash commands (installed as /<name>)
 ├── agents/           # Opencode agents (frontmatter + prompt body)
 ├── skills/           # Opencode skills (one dir per skill, plus git submodules)
 ├── docs/             # AGENTS-PLAN.md — the pre-task checklist this file refers to
@@ -101,7 +101,7 @@ person) executes it. These rules are what make that safe to repeat, because the
 global Opencode config directory is shared state that other tools also write to.
 
 - Every object maps to exactly one destination. `INSTALL.md` §1 is the authority
-  on where: agents, prompts and skills under `~/.config/opencode/<kind>/`; a
+  on where: agents, commands and skills under `~/.config/opencode/<kind>/`; a
   *project* `AGENTS.md` at `<project>/AGENTS.md`, **not** `.opencode/AGENTS.md`.
 - AGENTS.md is wrapped in a marker pair. A repeat install replaces that block in
   place; it never appends. Do not spell the full marker strings out anywhere
@@ -114,10 +114,17 @@ global Opencode config directory is shared state that other tools also write to.
   file to copy.
 - `skills` and `plugins` entries are ordered unions. Never sort them; later
   entries win.
-- When adding a skill, an agent, or a prompt, add it to the source tree and add a
-  row to `INSTALL.md` if the destination differs from the obvious one. Nothing
+- When adding a skill, an agent, or a command, add it to the source tree and add
+  a row to `INSTALL.md` if the destination differs from the obvious one. Nothing
   enumerates these files any more, so nothing needs editing when the count
   changes — that is the point of dropping the script.
+- Removing one is not enough on its own: nothing prunes an existing install, so
+  delete the stale file at the destination too. `INSTALL.md` §7 has the check.
+- Commands and agents are separate files with separate bodies. A command that
+  only needs to *invoke* an agent should delegate with `agent:` rather than copy
+  its prompt. A copy drifts: the stale 95-line `plan-mode.md` this repo deleted
+  was a copy of the planner prompt that kept describing a review loop the
+  planner had since been forbidden to run.
 - Never hand-edit a deployed copy. Edit the source tree and re-install.
 
 ## Integrating skills from other repositories
