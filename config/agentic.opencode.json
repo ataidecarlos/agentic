@@ -41,6 +41,7 @@
     "~/.understand-anything/repo/understand-anything-plugin/skills"
   ],
   "plugins": [
-    "superpowers@git+https://github.com/obra/superpowers.git"
+    "superpowers@git+https://github.com/obra/superpowers.git",
+    "@dietrichgebert/ponytail"
   ]
 }

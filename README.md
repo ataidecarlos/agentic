@@ -1,20 +1,30 @@
 # agentic
 
-Agents, skills and commands for OpenCode v2: a `design` pipeline that turns a
-request into a grounded, reviewed plan, a `/build` command that executes it, and
-supporting skills for session-end self-improvement and compressed communication.
+A **starting point** for an AI-driven development environment on OpenCode v2 —
+not a set-in-stone guide. It points at the core skills, agents and MCP servers
+worth having, so a new machine reaches the intended outcomes quickly. Every part
+of it is meant to be edited, extended, or deleted.
+
+Public domain — use it, copy it, alter it, steal it. See `LICENSE`.
 
 ## What this is
 
-Four kinds of object, one destination each. `INSTALL.md` maps them.
+A blueprint in four parts, each installed to its own destination:
 
-- `agents/<name>.md` — an OpenCode agent: frontmatter plus its system prompt body.
-- `commands/<name>.md` — a slash command, installed as `/<name>`.
-- `skills/<id>/SKILL.md` — an OpenCode skill. The directory name is the skill ID.
-- `config/agentic.opencode.json` — a config snippet to **merge**, not to copy.
+| Part | What it is | Expect to change it |
+|---|---|---|
+| `skills/` | Core skills, plus pointers to skills that live elsewhere | Grows and shrinks as better skills appear |
+| `agents/` | A `design → planner → reviewer → verifier` pipeline | A default shape, not a requirement |
+| `commands/` | `/build` and `/reviewer` | A convenience, not a mandate |
+| `config/agentic.opencode.json` | The MCP servers, skill sources and plugins worth having | One person's shortlist |
 
-There is no deployment script. `INSTALL.md` is the installer, and it is written
-for an agent to execute.
+`INSTALL.md` maps each part to its destination, and is written for an agent to
+execute. There is no deployment script.
+
+**Take what fits and delete the rest.** This is a starting point, not an
+authority: the agents are one opinion about how to plan, the MCP list is what one
+person found useful, and most of the skills are pointers to work that lives
+elsewhere. `INSTALL.md` §7 covers removing what you drop.
 
 ### The pipeline
 
@@ -94,6 +104,21 @@ and `wayfinder` (grilling inside a larger effort map).
 
 The skills are located at `skills/grill-me/SKILL.md` and `skills/grilling/SKILL.md`.
 Installing copies both directories to `~/.config/opencode/skills/`.
+
+### Ponytail
+
+The lazy-senior-dev ruleset: the smallest change that fully solves the task, and
+a reply a busy human understands in one read. Five companion skills ship with it
+(`ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`,
+`ponytail-review`), plus `/ponytail` commands and the `lite` / `full` / `ultra` /
+`off` levels.
+
+It is installed as a **plugin**, not vendored, and that is deliberate: it injects
+its ruleset on every turn and owns the active level, neither of which a copied
+`SKILL.md` could do. Source:
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) (MIT). It is
+listed under the `plugins` key in `config/agentic.opencode.json`; see `INSTALL.md`
+§4.
 
 ## Persistent Memory
 
@@ -217,6 +242,7 @@ agentic/
 
 | Path | Purpose |
 |---|---|
+| `LICENSE` | The Unlicense — public domain. This repo is meant to be copied and altered. |
 | `INSTALL.md` | **The installer.** Maps every object to its OpenCode v2 destination, and specifies the config merge. |
 | `commands/build.md` | `/build` — executes a validated plan, runs its `## Verification`. |
 | `commands/reviewer.md` | `/reviewer` — delegates to the `reviewer` agent with `agent:`. Holds no review logic of its own. |
@@ -251,6 +277,7 @@ expects:
 | Superpowers (15 skills) | [obra/superpowers](https://github.com/obra/superpowers) | Opencode **plugin**, via the `plugins` config key. Ships its own OpenCode support in `.opencode/INSTALL.md`. |
 | Understand Anything (9 skills) | [Egonex-AI/Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) | External checkout plus a `skills` config entry pointing at its `understand-anything-plugin/skills` directory. |
 | `grill-me` + `grilling` | [mattpocock/skills](https://github.com/mattpocock/skills) | Two skill directories **vendored verbatim** under `skills/`, copied byte-for-byte from `skills/productivity/`. MIT. |
+| Ponytail (6 skills, `/ponytail`) | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | Opencode **plugin**, via the `plugins` config key. Ships first-class OpenCode support in `.opencode/plugins/` and `.opencode/command/`, so it is installed as a plugin rather than vendored — a copy would lose the per-turn ruleset injection and the level state. MIT. |
 
 `mattpocock/skills` is a 38-skill collection, so the repository itself must not go
 under `skills/` — OpenCode would register every nested skill and collide with the
