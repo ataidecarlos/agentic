@@ -137,6 +137,16 @@ A repository is not a skill just because it is useful. Check its shape first:
   do NOT put it under `skills/`. Either list its skills directory in the config
   snippet's `skills` array, or install it as a plugin when the project ships
   first-class support for this harness.
+- **You want one or two skills out of a multi-skill repo:** vendor those
+  directories individually under `skills/`, each keeping its own root `SKILL.md`,
+  and record source and licence in the README's provenance table. Vendor the
+  *directories*, never the repo. This is how `caveman`, `hindsight`,
+  `llm-council`, `grill-me` and `grilling` got here.
+
+Before vendoring, check whether the skill is only an **entry point** to another
+one. `grill-me` is seven lines that load `grilling`; shipping it alone produces a
+skill that points at nothing, which is how it was broken here before. Copy the
+pair, and verify the ID the body names actually exists after install.
 
 OpenCode V2 discovers a file named exactly `SKILL.md` at **any depth** under a
 skill source, taking the immediate parent directory name as the skill ID. A

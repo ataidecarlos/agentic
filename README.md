@@ -73,6 +73,28 @@ Ultra-compressed communication mode that cuts output tokens while keeping techni
 
 The skill is located at `skills/caveman/SKILL.md`. Installing it copies the whole directory to `~/.config/opencode/skills/caveman/`.
 
+### Grill Me
+
+A relentless interview that sharpens a plan, decision, or idea. Start it with
+`@grill-me` in a prompt. It is `disable-model-invocation: true`, so the model will
+not reach for it on its own — you invoke it deliberately.
+
+**It is a pair, and vendoring only half of it is why this skill used to be
+broken.** `skills/grill-me/SKILL.md` is seven lines whose entire body is
+`Call the Skill tool with "grilling".` The interview itself lives in
+`skills/grilling/SKILL.md`. With `grilling` absent, `grill-me` was a pointer to
+nothing — which is exactly the state it was removed from this repo in. Both halves
+are required.
+
+Both are vendored **verbatim** from
+[mattpocock/skills](https://github.com/mattpocock/skills), `skills/productivity/`.
+Two neighbouring skills are deliberately not included: `grill-with-docs` (the same
+interview but stateful — it reads the codebase and records `GLOSSARY.md` and ADRs)
+and `wayfinder` (grilling inside a larger effort map).
+
+The skills are located at `skills/grill-me/SKILL.md` and `skills/grilling/SKILL.md`.
+Installing copies both directories to `~/.config/opencode/skills/`.
+
 ## Persistent Memory
 
 The project maintains global lessons learned from past sessions in `~/.opencode/memory/`. These lessons are automatically loaded at the start of each session through `AGENTS.md`, which all agents are required to read.
@@ -178,6 +200,8 @@ agentic/
 │   │   └── SKILL.md          # Karpathy guidelines skill
 │   ├── caveman/
 │   │   └── SKILL.md          # Caveman skill
+│   ├── grill-me/             # @grill-me — entry point; its body loads `grilling`
+│   ├── grilling/             # the relentless interview itself
 │   ├── llm-council/
 │   │   └── SKILL.md          # LLM Council skill
 │   └── stop-slop/            # Git submodule: hardikpandya/stop-slop
@@ -205,6 +229,8 @@ agentic/
 | `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
+| `skills/grill-me/SKILL.md` | `@grill-me` — user-invoked entry point; its entire body loads the `grilling` skill. |
+| `skills/grilling/SKILL.md` | The relentless interview. Vendored verbatim from `mattpocock/skills`. |
 | `skills/llm-council/SKILL.md` | LLM Council skill. The CLI itself lives in the `homelab` repo, `ai/council/`. |
 | `skills/stop-slop` | Git submodule for `hardikpandya/stop-slop`. |
 | `config/agentic.opencode.json` | Managed config merged into the target Opencode config. |
@@ -224,6 +250,15 @@ expects:
 | `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | Git submodule. The repo root is a single skill (`SKILL.md` + `references/`), so it drops straight into `skills/`. |
 | Superpowers (15 skills) | [obra/superpowers](https://github.com/obra/superpowers) | Opencode **plugin**, via the `plugins` config key. Ships its own OpenCode support in `.opencode/INSTALL.md`. |
 | Understand Anything (9 skills) | [Egonex-AI/Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) | External checkout plus a `skills` config entry pointing at its `understand-anything-plugin/skills` directory. |
+| `grill-me` + `grilling` | [mattpocock/skills](https://github.com/mattpocock/skills) | Two skill directories **vendored verbatim** under `skills/`, copied byte-for-byte from `skills/productivity/`. MIT. |
+
+`mattpocock/skills` is a 38-skill collection, so the repository itself must not go
+under `skills/` — OpenCode would register every nested skill and collide with the
+ones already installed. Only the two directories needed are vendored, each with a
+root `SKILL.md`, which is the same shape as `caveman`, `hindsight`, `karpathy-guidelines`
+and `llm-council`. The cost of vendoring is that upstream fixes do not arrive on
+their own: re-copy from `skills/productivity/grill-me/` and `.../grilling/` when
+you want to move.
 
 Init the submodule after cloning:
 
