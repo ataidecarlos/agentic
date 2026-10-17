@@ -2,18 +2,37 @@
 description: "Devil's advocate: reviews plans and code for flaws, edge cases, and missed considerations"
 mode: subagent
 hidden: true
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  edit: deny
-  bash: deny
-  task: deny
-  webfetch: allow
-  websearch: allow
-  lsp: allow
-  skill: allow
-  todowrite: deny
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: websearch
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
+  - action: todowrite
+    resource: "*"
+    effect: deny
 ---
 
 # Reviewer — devil's advocate

@@ -113,31 +113,57 @@ See `AGENTS.md` for the complete memory loading mechanism.
 
 ## Agent Orchestration
 
-The Plan agent automatically invokes the Reviewer after completing a plan. This ensures every plan is reviewed for flaws before implementation.
+The `design` pipeline turns a request into a grounded plan. `design` is the only
+interactive stage, and the only stage permitted to launch subagents — every
+later stage runs unattended in a fresh context.
+
+| # | Stage | Agent | Question it answers |
+|---|---|---|---|
+| 1 | Interrogate → brief → orchestrate | `design` (primary) | What is actually worth building, and why? |
+| 2 | Plan | `planner` (subagent) | What is the decision-complete plan? |
+| 3 | Review | `reviewer` (subagent) | Is the plan **sound**? |
+| 4 | Verify | `verifier` (subagent) | Is the plan **true**? |
+
+`design` dispatches the stages itself, in sequence, because a subagent cannot
+launch another subagent. `reviewer` must return APPROVE before `verifier` runs.
+The Reviewer → Verifier pair runs at most 3 times; unresolved concerns are then
+presented rather than looped on.
 
 ```mermaid
-graph LR
-    A[User Request] --> B[Plan Agent]
-    B --> C[Plan Output]
-    C --> D[Reviewer Agent]
-    D --> E{Verdict?}
-    E -->|APPROVE| F[Ready for Build]
-    E -->|REVISE| B
-    E -->|REJECT| B
+flowchart TD
+    A[Request] --> B[design]
+    B --> C[Brief]
+    C -->|open questions| A
+    C --> D[planner]
+    D --> E[reviewer]
+    E -->|REVISE / REJECT| D
+    E -->|APPROVE| F[verifier]
+    F -->|REVISE / REJECT| D
+    F -->|APPROVE| G[Grounded plan]
+    G --> H["Build agent + /build"]
 ```
 
-The Build agent (not yet created) can also manually invoke the Reviewer for code reviews.
+`agents/plan.md` is a 13-line override that hides OpenCode's built-in `plan`
+agent, so `design` is the only planning entry point. Delete it to restore the
+built-in.
+
+`/plan-mode` and `/reviewer` remain available as standalone commands for
+one-off use; they are not part of the pipeline.
 
 ## Layout
 
 ```
 agentic/
 ├── prompts/
-│   ├── plan-mode.md          # Canonical Plan prompt
-│   └── reviewer.md           # Canonical Reviewer prompt
+│   ├── build.md              # /build — consume a validated plan
+│   ├── plan-mode.md          # Canonical Plan prompt (standalone /plan-mode)
+│   └── reviewer.md           # Canonical Reviewer prompt (standalone /reviewer)
 ├── agents/
-│   ├── plan.md               # Opencode Plan agent (frontmatter + verbatim body)
-│   └── reviewer.md           # Opencode Reviewer agent (hidden, frontmatter + verbatim body)
+│   ├── design.md             # Primary: interrogate, brief, orchestrate the pipeline
+│   ├── planner.md            # Subagent: produce the plan
+│   ├── reviewer.md           # Subagent: is the plan sound?
+│   ├── verifier.md           # Subagent: is the plan true?
+│   └── plan.md               # Override hiding the built-in `plan` agent
 ├── skills/
 │   ├── hindsight/
 │   │   └── SKILL.md          # Hindsight skill
@@ -148,6 +174,8 @@ agentic/
 │   ├── llm-council/
 │   │   └── SKILL.md          # LLM Council skill
 │   └── stop-slop/            # Git submodule: hardikpandya/stop-slop
+├── docs/
+│   └── AGENTS-PLAN.md        # Pre-task checklist (P1-P8) referenced by AGENTS.md
 ├── config/
 │   └── agentic.opencode.json # MCP servers, skill sources, plugins
 ├── deploy.ps1                # PowerShell deployment script
@@ -159,10 +187,15 @@ agentic/
 
 | Path | Purpose |
 |---|---|
-| `prompts/plan-mode.md` | Canonical Plan prompt. |
-| `prompts/reviewer.md` | Canonical Reviewer prompt. |
-| `agents/plan.md` | Opencode Plan agent. Body is `prompts/plan-mode.md` verbatim. |
-| `agents/reviewer.md` | Opencode Reviewer agent. Body is `prompts/reviewer.md` verbatim. |
+| `prompts/build.md` | `/build` — executes a validated plan, runs its `## Verification`. |
+| `prompts/plan-mode.md` | Canonical Plan prompt, deployed as the standalone `/plan-mode` command. |
+| `prompts/reviewer.md` | Canonical Reviewer prompt, deployed as the standalone `/reviewer` command. |
+| `agents/design.md` | Pipeline entry point. Primary, read-only. Interrogates, emits a brief, then dispatches planner → reviewer → verifier. |
+| `agents/planner.md` | Subagent. Produces the plan. Cannot dispatch other agents. |
+| `agents/reviewer.md` | Subagent. Judges the plan's soundness. Must APPROVE before the verifier runs. |
+| `agents/verifier.md` | Subagent. Grounds the plan against the real repository — do the named paths and symbols exist? |
+| `agents/plan.md` | Override that hides OpenCode's built-in `plan` agent, so `design` is the only planning entry point. Delete to restore the built-in. |
+| `docs/AGENTS-PLAN.md` | The P1-P8 pre-task checklist that `AGENTS.md` tells agents to read before non-trivial work. |
 | `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
@@ -369,8 +402,17 @@ This ensures that global AGENTS.md files (with instructions for all projects) ar
 ```sh
 # Agents
 mkdir -p ~/.config/opencode/agents
-cp agents/plan.md ~/.config/opencode/agents/plan.md
+cp agents/design.md ~/.config/opencode/agents/design.md
+cp agents/planner.md ~/.config/opencode/agents/planner.md
 cp agents/reviewer.md ~/.config/opencode/agents/reviewer.md
+cp agents/verifier.md ~/.config/opencode/agents/verifier.md
+cp agents/plan.md ~/.config/opencode/agents/plan.md
+
+# Commands (each prompt/*.md becomes /<name>)
+mkdir -p ~/.config/opencode/commands
+cp prompts/build.md ~/.config/opencode/commands/build.md
+cp prompts/plan-mode.md ~/.config/opencode/commands/plan-mode.md
+cp prompts/reviewer.md ~/.config/opencode/commands/reviewer.md
 
 # Skills
 mkdir -p ~/.config/opencode/skills/hindsight
@@ -389,8 +431,17 @@ PowerShell:
 ```powershell
 # Agents
 New-Item -ItemType Directory -Force ~/.config/opencode/agents | Out-Null
-Copy-Item agents\plan.md ~/.config\opencode\agents\plan.md
+Copy-Item agents\design.md ~/.config\opencode\agents\design.md
+Copy-Item agents\planner.md ~/.config\opencode\agents\planner.md
 Copy-Item agents\reviewer.md ~/.config\opencode\agents\reviewer.md
+Copy-Item agents\verifier.md ~/.config\opencode\agents\verifier.md
+Copy-Item agents\plan.md ~/.config\opencode\agents\plan.md
+
+# Commands (each prompts\*.md becomes /<name>)
+New-Item -ItemType Directory -Force ~/.config/opencode/commands | Out-Null
+Copy-Item prompts\build.md ~/.config\opencode\commands\build.md
+Copy-Item prompts\plan-mode.md ~/.config\opencode\commands\plan-mode.md
+Copy-Item prompts\reviewer.md ~/.config\opencode\commands\reviewer.md
 
 # Skills
 New-Item -ItemType Directory -Force ~/.config/opencode/skills/hindsight | Out-Null
@@ -409,8 +460,17 @@ Copy-Item AGENTS.md ~/.config\opencode\AGENTS.md
 ```sh
 # Agents
 mkdir -p <project>/.opencode/agents
-cp agents/plan.md <project>/.opencode/agents/plan.md
+cp agents/design.md <project>/.opencode/agents/design.md
+cp agents/planner.md <project>/.opencode/agents/planner.md
 cp agents/reviewer.md <project>/.opencode/agents/reviewer.md
+cp agents/verifier.md <project>/.opencode/agents/verifier.md
+cp agents/plan.md <project>/.opencode/agents/plan.md
+
+# Commands (each prompt/*.md becomes /<name>)
+mkdir -p <project>/.opencode/commands
+cp prompts/build.md <project>/.opencode/commands/build.md
+cp prompts/plan-mode.md <project>/.opencode/commands/plan-mode.md
+cp prompts/reviewer.md <project>/.opencode/commands/reviewer.md
 
 # Skills
 mkdir -p <project>/.opencode/skills/hindsight
@@ -429,8 +489,17 @@ PowerShell:
 ```powershell
 # Agents
 New-Item -ItemType Directory -Force <project>/.opencode/agents | Out-Null
-Copy-Item agents\plan.md <project>/.opencode\agents\plan.md
+Copy-Item agents\design.md <project>/.opencode\agents\design.md
+Copy-Item agents\planner.md <project>/.opencode\agents\planner.md
 Copy-Item agents\reviewer.md <project>/.opencode\agents\reviewer.md
+Copy-Item agents\verifier.md <project>/.opencode\agents\verifier.md
+Copy-Item agents\plan.md <project>/.opencode\agents\plan.md
+
+# Commands (each prompts\*.md becomes /<name>)
+New-Item -ItemType Directory -Force <project>/.opencode/commands | Out-Null
+Copy-Item prompts\build.md <project>/.opencode\commands\build.md
+Copy-Item prompts\plan-mode.md <project>/.opencode\commands\plan-mode.md
+Copy-Item prompts\reviewer.md <project>/.opencode\commands\reviewer.md
 
 # Skills
 New-Item -ItemType Directory -Force <project>/.opencode/skills/hindsight | Out-Null
@@ -450,31 +519,48 @@ Copy-Item AGENTS.md <project>/.opencode\AGENTS.md
 
 2. **Verify agent registration:**
    ```sh
-   opencode agent list
+   opencode debug agents
    ```
-   Expected output: `plan (primary)` and `reviewer (subagent)` entries.
+   Expected entries: `design` (`primary`, visible — it is the entry point),
+   plus `planner`, `reviewer` and `verifier` as `subagent`. Those three are
+   `"hidden": true`, and so is `plan`: the built-in `plan` agent is hidden by
+   the override in `agents/plan.md`.
+
+   `hidden` affects listings only, not launching: `design` still dispatches
+   `planner`, `reviewer` and `verifier` by ID.
+
+   Commands are verified with `/` in the TUI: `/build`, `/plan-mode`,
+   `/reviewer`.
 
 ## Usage
 
-### Plan Agent
+### Design pipeline
 
-**TUI:** Switch to the `plan` agent, paste the request, review the plan, then switch to the Build agent to implement.
+**TUI:** Switch to the `design` agent, describe what you want, and answer its
+questions. It emits a design brief, then runs `planner` → `reviewer` →
+`verifier` on your behalf. Once it presents the grounded plan, switch to the
+`build` agent and run `/build`.
 
 **CLI:**
 
 ```sh
-opencode run --agent plan --model <model-id> "<request>"
+opencode run --agent design "<request>"
 ```
 
-### Reviewer Agent
+`design` is read-only — no file edits, no shell. That is deliberate: the plan is
+interrogated, reviewed and grounded before anything is implemented.
 
-**Manual invocation:**
+### /build
 
-```sh
-opencode run --agent reviewer --prompt "Review this plan: <plan content>"
-```
+Executes the validated plan from the conversation. It refuses to run without one:
+with no plan in context it stops rather than inferring one from the surrounding
+conversation. It runs the plan's `## Verification` section and reports the real
+command and the real output, not a summary that it passed.
 
-**Automatic invocation:** The Plan agent automatically invokes the Reviewer after completing a plan.
+### Standalone commands
+
+`/plan-mode` and `/reviewer` remain deployed as commands for one-off use outside
+the pipeline. `/plan-mode` is the pre-pipeline planner prompt.
 
 ### Hindsight Skill
 
@@ -495,19 +581,30 @@ opencode run --agent reviewer --prompt "Review this plan: <plan content>"
 
 ## Permission model
 
-### Plan Agent
+Every agent starts from the same base policy (`*` allow, `.env` reads ask) and
+appends ordered rules; the last matching rule wins.
 
-Fully read-only for exploration. File edits, shell commands, and subagent delegation are denied; `todowrite` is allowed only for planning-state tracking. The `task` permission is allowed to invoke the Reviewer subagent.
+| Agent | Edit | Shell | Subagents | Notes |
+|---|---|---|---|---|
+| `design` | deny | deny | deny `*`, then allow `planner`, `reviewer`, `verifier` | Also allows `question` — it is the only interactive stage |
+| `planner` | deny | deny | deny | Read-only; cannot run the review stages itself |
+| `reviewer` | deny | deny | deny | Read-only; also denies `todowrite` |
+| `verifier` | deny | deny | deny | Read-only; cannot repair what it finds missing |
 
-### Reviewer Agent
+`design` denies `subagent` broadly and then re-allows three specific IDs, so rule
+order matters: broad rule first, exceptions after it.
 
-Fully read-only. File edits, shell commands, and subagent delegation are denied. The Reviewer reads plans and code from scratch without prior context.
+## Keeping prompts and agents in sync
 
-## Keeping prompt and agent in sync
+`prompts/<name>.md` deploys to `/<name>` as a command; `agents/<name>.md` is the
+agent. They are separate files with separate bodies, and they have already
+drifted — `prompts/reviewer.md` (200 lines) is shorter than `agents/reviewer.md`
+(218 lines). Editing one does not update the other.
 
-When `prompts/<agent-name>.md` changes, copy it verbatim into `agents/<agent-name>.md` as the body (the frontmatter stays unchanged), then re-deploy.
+`agents/design.md` and `agents/verifier.md` have no prompt counterpart: the
+pipeline stages exist only as agents.
 
 ## Behaviors & troubleshooting
 
 - **Provider flake:** Some providers occasionally return empty completions or truncate at the output-token limit. Fix: rerun the request.
-- **Don't trust the model's self-reported tool list** ("list every tool available to you"). Models omit tools from their enumeration. Trust `opencode agent list` instead.
+- **Don't trust the model's self-reported tool list** ("list every tool available to you"). Models omit tools from their enumeration. Trust `opencode debug agents` instead.

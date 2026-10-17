@@ -66,9 +66,10 @@ Do not suggest hindsight for straightforward implementations, non-implementation
 
 ```
 agentic/
-├── prompts/          # Canonical portable prompts
+├── prompts/          # Canonical portable prompts (deployed as /<name> commands)
 ├── agents/           # Opencode agents (frontmatter + prompt body)
 ├── skills/           # Opencode skills (one dir per skill, plus git submodules)
+├── docs/             # AGENTS-PLAN.md — the pre-task checklist this file refers to
 ├── config/           # Managed config: MCP servers, skill sources, plugins
 ├── deploy.ps1        # PowerShell deployment script
 ├── deploy.sh         # Bash deployment script
@@ -77,7 +78,22 @@ agentic/
 
 ## Agent Orchestration
 
-The Plan agent automatically invokes the Reviewer agent after completing a plan. This ensures every plan is reviewed for flaws before implementation.
+The `design` pipeline is the planning path. `design` (primary, read-only)
+interrogates the request, emits a brief, then dispatches `planner` → `reviewer`
+→ `verifier`, in that order and each in a fresh context. Only `design` may launch
+subagents — the other stages cannot, so it must call every stage itself.
+`reviewer` must return APPROVE before `verifier` runs, and the Reviewer →
+Verifier pair runs at most 3 times; unresolved concerns are presented rather
+than looped on.
+
+Implementation happens afterwards in the built-in `build` agent via `/build`,
+which consumes the plan and reports its `## Verification` output verbatim.
+
+The four backstage files in `agents/` are `hidden: true` — `plan`, `planner`,
+`reviewer`, `verifier`. `design` is deliberately **not** hidden, because it has
+to appear in the agent picker as the entry point. Hidden controls listings only,
+not launching: `design` still dispatches the subagents by ID, and `plan.md` is a
+no-body override whose only job is to hide the built-in `plan` agent.
 
 ## Deployment Invariants
 
