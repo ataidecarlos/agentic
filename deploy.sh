@@ -4,7 +4,7 @@
 # Usage:
 #   ./deploy.sh                    # Deploy to user-global (~/.config/opencode/)
 #   ./deploy.sh --project .        # Deploy to current project (.opencode/)
-#   ./deploy.sh --no-config        # Skip the managed config merge (MCP, skills, plugin)
+#   ./deploy.sh --no-config        # Skip the managed config merge (MCP, skills, plugins)
 #   ./deploy.sh --no-prompts       # Skip prompt -> command deployment
 #
 # The deployment is idempotent: running it twice produces the same result and
@@ -314,9 +314,9 @@ if [[ "$USE_CONFIG" == "1" ]]; then
     # reliably. Object keys are sorted recursively so the output is byte-stable;
     # arrays keep their order because precedence depends on it.
     #
-    # NOTE: the plugin key is `plugin` (singular) on V1-line OpenCode builds.
-    # Builds following the V2 config guide expect `plugins` and reject the
-    # singular form. Probe your build before assuming either spelling.
+    # NOTE: the plugin key is `plugins` on V2. V1-line builds used `plugin`
+    # (singular) and the V2 schema marks it deprecated, so a V1 target needs the
+    # key renamed by hand before its plugins will load.
     MERGE_REPORT="$(node -e '
 const fs = require("fs");
 const [snippetPath, targetPath] = process.argv.slice(1);
@@ -350,7 +350,7 @@ for (const [name, def] of Object.entries(servers)) {
 }
 
 // Arrays are unioned, preserving order: later entries win for skills and plugins.
-for (const key of ["skills", "plugin"]) {
+for (const key of ["skills", "plugins"]) {
   const incoming = snippet[key];
   if (!Array.isArray(incoming)) continue;
   const before = Array.isArray(target[key]) ? target[key] : [];

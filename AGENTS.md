@@ -93,7 +93,7 @@ config directory is shared state that other tools also write to.
   target's own `opencode.json(c)`. OpenCode loads only one extra config file
   (selected by `OPENCODE_CONFIG`), so a second `*.opencode.json` file in the
   config directory is silently ignored.
-- `skills` and `plugin` entries are ordered unions. Never sort them; later
+- `skills` and `plugins` entries are ordered unions. Never sort them; later
   entries win.
 - When adding a skill, a prompt, or an MCP server, add it to the source tree so
   the deploy scripts pick it up. Never hand-edit the deployed copies.
@@ -109,13 +109,18 @@ A repository is not a skill just because it is useful. Check its shape first:
   snippet's `skills` array, or install it as a plugin when the project ships
   first-class support for this harness.
 
-OpenCode discovers `SKILL.md` at the root of each skill directory, so a
-nested-skill repository dropped there is silently skipped.
+OpenCode V2 discovers a file named exactly `SKILL.md` at **any depth** under a
+skill source, taking the immediate parent directory name as the skill ID. A
+multi-skill repository dropped under `skills/` therefore does not fail loudly —
+it registers every nested skill it contains, duplicating the IDs supplied by the
+plugin or checkout that already provides them. Keep such repos out of `skills/`.
 
-Config key spellings differ by Opencode version and must be probed, not
-assumed. `plugin` (singular) works on V1-line builds; `plugins` is the V2 form.
-A rejected key is logged as a `configuration normalization diagnostic`, and
-`opencode mcp list` does not surface it — start the server to see it.
+Config key spellings differ by Opencode version. This repo targets V2:
+`plugins`, `skills` (one array), `mcp.servers`, `disabled`. The V1-line
+spellings `plugin` (singular) and `mcp` as a flat map are deprecated in the V2
+schema and are ignored when present. A rejected key is logged as a
+`configuration normalization diagnostic`, and `opencode mcp list` does not
+surface it — start the server to see it.
 
 ## Key Principles
 

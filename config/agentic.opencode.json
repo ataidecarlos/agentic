@@ -40,7 +40,7 @@
   "skills": [
     "~/.understand-anything/repo/understand-anything-plugin/skills"
   ],
-  "plugin": [
+  "plugins": [
     "superpowers@git+https://github.com/obra/superpowers.git"
   ]
 }

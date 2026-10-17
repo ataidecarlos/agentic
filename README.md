@@ -143,11 +143,10 @@ agentic/
 │   │   └── SKILL.md          # Hindsight skill
 │   ├── karpathy-guidelines/
 │   │   └── SKILL.md          # Karpathy guidelines skill
-│   ├── grill-me/
-│   │   ├── SKILL.md          # Plan/design interview skill
-│   │   └── agents/openai.yaml
 │   ├── caveman/
 │   │   └── SKILL.md          # Caveman skill
+│   ├── llm-council/
+│   │   └── SKILL.md          # LLM Council skill
 │   └── stop-slop/            # Git submodule: hardikpandya/stop-slop
 ├── config/
 │   └── agentic.opencode.json # MCP servers, skill sources, plugins
@@ -166,7 +165,6 @@ agentic/
 | `agents/reviewer.md` | Opencode Reviewer agent. Body is `prompts/reviewer.md` verbatim. |
 | `skills/hindsight/SKILL.md` | Hindsight skill for session-end self-improvement. |
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
-| `skills/grill-me/SKILL.md` | Relentless interview to sharpen a plan or design. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
 | `skills/llm-council/SKILL.md` | LLM Council skill. The CLI itself lives in the `homelab` repo, `ai/council/`. |
 | `skills/stop-slop` | Git submodule for `hardikpandya/stop-slop`. |
@@ -185,7 +183,7 @@ expects:
 | Skill | Source | Mechanism |
 |---|---|---|
 | `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | Git submodule. The repo root is a single skill (`SKILL.md` + `references/`), so it drops straight into `skills/`. |
-| Superpowers (15 skills) | [obra/superpowers](https://github.com/obra/superpowers) | Opencode **plugin**, via the `plugin` config key. Ships its own OpenCode support in `.opencode/INSTALL.md`. |
+| Superpowers (15 skills) | [obra/superpowers](https://github.com/obra/superpowers) | Opencode **plugin**, via the `plugins` config key. Ships its own OpenCode support in `.opencode/INSTALL.md`. |
 | Understand Anything (9 skills) | [Egonex-AI/Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) | External checkout plus a `skills` config entry pointing at its `understand-anything-plugin/skills` directory. |
 
 Init the submodule after cloning:
@@ -204,10 +202,12 @@ redirects the old name, so either URL resolves.
 
 ### Plugin config key
 
-The managed config uses **`plugin`** (singular). V1-line Opencode builds accept
-the singular form and reject `plugins`; builds following the V2 config guide
-expect `plugins`. If a plugin silently fails to load, check which spelling your
-build wants:
+The managed config uses **`plugins`**, the V2 field. V2's schema marks
+`plugin` (singular, the V1-line spelling) as deprecated and ignores it, so a
+target config that still carries the old key needs it renamed by hand —
+plugins listed under `plugin` will not load.
+
+If a plugin silently fails to load, check which spelling your build wants:
 
 ```sh
 grep -i 'normalization diagnostic' ~/.local/share/opencode/log/opencode.log
@@ -228,6 +228,13 @@ The deployment scripts install agents, skills, and the AGENTS.md file:
 # Per-project
 .\deploy.ps1 -Project .
 ```
+
+`deploy.ps1` requires **PowerShell 7+** (`pwsh`). Windows PowerShell 5.1 — the
+stock `powershell.exe` — does not support `ConvertFrom-Json -AsHashtable` and
+aborts partway through with `A parameter cannot be found that matches parameter
+name 'AsHashtable'`, after it has already copied the agents, skills and
+commands. Run it as `pwsh -File .\deploy.ps1 ...`, or use `deploy.sh` on
+Unix-like hosts.
 
 **Bash (Unix-like):**
 
@@ -272,7 +279,7 @@ global config directory is shared state that other tools also write to.
 - **MCP servers** are merged by name. Only the keys defined in
   `config/agentic.opencode.json` are written; every other setting in the target
   config is preserved, including legacy servers declared directly under `mcp`.
-- **`skills` and `plugin`** are merged as ordered unions: your existing entries
+- **`skills` and `plugins`** are merged as ordered unions: your existing entries
   keep their precedence and new ones are appended. Order matters for both.
 - Object keys are sorted recursively so the written file is byte-stable across
   runs and reviewable in version control. Arrays keep their order. The previous
@@ -343,7 +350,7 @@ npm install superpowers@git+https://github.com/obra/superpowers.git --prefix "$H
 ```
 
 then use `C:\Users\<you>\.config\opencode\node_modules\superpowers` as the
-`plugin` entry.
+`plugins` entry.
 
 ### AGENTS.md Deployment Behavior
 

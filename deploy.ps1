@@ -290,7 +290,11 @@ function ConvertTo-HashtableDeep {
         return $h
     }
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-        return @($Value | ForEach-Object { ConvertTo-HashtableDeep $_ })
+        # Leading comma required: PowerShell unrolls a single-element array on
+        # return, which would silently turn a one-entry list such as
+        # `"command": ["C:/one/exe.exe"]` into a bare scalar and corrupt the
+        # target's unrelated settings. Same idiom as Merge-ArrayEntry below.
+        return , @($Value | ForEach-Object { ConvertTo-HashtableDeep $_ })
     }
     return $Value
 }
@@ -405,10 +409,10 @@ if ($UsingConfig) {
     # Extra skill sources (directories or HTTP catalogs) and plugins, merged as
     # ordered unions so pre-existing entries keep their precedence.
     #
-    # NOTE: the key is `plugin` (singular) on V1-line OpenCode builds. Builds
-    # that follow the V2 config guide expect `plugins`, and reject the singular
-    # form. Probe your build before assuming either spelling.
-    foreach ($Key in @("skills", "plugin")) {
+    # NOTE: the key is `plugins` on V2. V1-line builds used `plugin` (singular)
+    # and the V2 schema marks it deprecated, so a V1 target needs the key
+    # renamed by hand before its plugins will load.
+    foreach ($Key in @("skills", "plugins")) {
         $Incoming = $Snippet[$Key]
         if ($null -eq $Incoming) { continue }
         $Before = @($Config[$Key])
@@ -423,7 +427,7 @@ if ($UsingConfig) {
             }
         }
         if ($Key -eq "skills") { $SkillPathCount += $Added }
-        if ($Key -eq "plugin") { $PluginCount += $Added }
+        if ($Key -eq "plugins") { $PluginCount += $Added }
     }
 
     Copy-Item -LiteralPath $TargetConfig -Destination "$TargetConfig.bak" -Force
