@@ -1,6 +1,7 @@
-# deploy.sh is executed through its shebang. A CRLF working copy makes the
-# kernel fail with "bad interpreter", so pin shell scripts to LF regardless of
-# the contributor's core.autocrlf setting.
+# Shell scripts here run through their shebang, and a CRLF working copy makes the
+# kernel fail with "bad interpreter". Pin shell scripts to LF regardless of the
+# contributor's core.autocrlf setting. This repo currently ships no scripts —
+# there is no deploy script — so the rules are inert unless one is added back.
 *.sh text eol=lf
 
 *.ps1 text eol=crlf

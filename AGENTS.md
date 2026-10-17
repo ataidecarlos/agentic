@@ -45,7 +45,7 @@ metadata:
 
 As of this session, the following lessons have been learned:
 
-1. **Deployment Infrastructure** — Always update deployment scripts when adding new agents or skills
+1. **Install Infrastructure** — Skills, agents and prompts install by file placement; `INSTALL.md` is the mechanism, and it needs no edit when the count changes
 2. **Avoid Hardcoding** — Don't hardcode provider-specific values in portable agents
 3. **Clarify Requirements** — Ask clarifying questions before implementing complex features
 4. **Test Integration** — Test agent orchestration integration points early and iterate
@@ -66,13 +66,12 @@ Do not suggest hindsight for straightforward implementations, non-implementation
 
 ```
 agentic/
-├── prompts/          # Canonical portable prompts (deployed as /<name> commands)
+├── prompts/          # Canonical portable prompts (installed as /<name> commands)
 ├── agents/           # Opencode agents (frontmatter + prompt body)
 ├── skills/           # Opencode skills (one dir per skill, plus git submodules)
 ├── docs/             # AGENTS-PLAN.md — the pre-task checklist this file refers to
-├── config/           # Managed config: MCP servers, skill sources, plugins
-├── deploy.ps1        # PowerShell deployment script
-├── deploy.sh         # Bash deployment script
+├── config/           # Managed config snippet: MCP servers, skill sources, plugins
+├── INSTALL.md        # The installer. There is no deployment script.
 └── AGENTS.md         # This file
 ```
 
@@ -95,24 +94,31 @@ to appear in the agent picker as the entry point. Hidden controls listings only,
 not launching: `design` still dispatches the subagents by ID, and `plan.md` is a
 no-body override whose only job is to hide the built-in `plan` agent.
 
-## Deployment Invariants
+## Install Invariants
 
-`deploy.ps1` and `deploy.sh` must stay idempotent, because the global Opencode
-config directory is shared state that other tools also write to.
+There is no deployment script. `INSTALL.md` is the installer, and an agent (or a
+person) executes it. These rules are what make that safe to repeat, because the
+global Opencode config directory is shared state that other tools also write to.
 
-- AGENTS.md is wrapped in a pair of `agentic:begin` / `agentic:end` HTML comment
-  markers. A repeat run replaces that block in place; it never appends.
-  Do not spell the full marker strings out anywhere inside this file — the
-  deploy scripts locate the block by matching them, and a second occurrence
-  inside the content would truncate the match.
+- Every object maps to exactly one destination. `INSTALL.md` §1 is the authority
+  on where: agents, prompts and skills under `~/.config/opencode/<kind>/`; a
+  *project* `AGENTS.md` at `<project>/AGENTS.md`, **not** `.opencode/AGENTS.md`.
+- AGENTS.md is wrapped in a marker pair. A repeat install replaces that block in
+  place; it never appends. Do not spell the full marker strings out anywhere
+  inside this file — the block is located by matching them, and a second
+  occurrence inside the content would truncate the match.
 - MCP servers are merged by name from `config/agentic.opencode.json` into the
   target's own `opencode.json(c)`. OpenCode loads only one extra config file
   (selected by `OPENCODE_CONFIG`), so a second `*.opencode.json` file in the
-  config directory is silently ignored.
+  config directory is silently ignored. That snippet is a merge source, never a
+  file to copy.
 - `skills` and `plugins` entries are ordered unions. Never sort them; later
   entries win.
-- When adding a skill, a prompt, or an MCP server, add it to the source tree so
-  the deploy scripts pick it up. Never hand-edit the deployed copies.
+- When adding a skill, an agent, or a prompt, add it to the source tree and add a
+  row to `INSTALL.md` if the destination differs from the obvious one. Nothing
+  enumerates these files any more, so nothing needs editing when the count
+  changes — that is the point of dropping the script.
+- Never hand-edit a deployed copy. Edit the source tree and re-install.
 
 ## Integrating skills from other repositories
 

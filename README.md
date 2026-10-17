@@ -1,36 +1,43 @@
 # agentic
 
-Agents and skills for Opencode. Includes a planning agent that produces decision-complete execution plans, a reviewer agent that acts as a devil's advocate to find flaws in plans and code reviews, and a hindsight skill for session-end self-improvement.
+Agents, skills and commands for OpenCode v2: a `design` pipeline that turns a
+request into a grounded, reviewed plan, a `/build` command that executes it, and
+supporting skills for session-end self-improvement and compressed communication.
 
 ## What this is
 
-Four deliverables, one relationship:
+Four kinds of object, one destination each. `INSTALL.md` maps them.
 
-- `prompts/<agent-name>.md` — the canonical portable prompt. Harness-agnostic prose.
-- `agents/<agent-name>.md` — the Opencode agent. Frontmatter + verbatim prompt body.
-- `skills/<skill-name>/SKILL.md` — the OpenCode skill. Frontmatter + instructions.
-- `config/agentic.opencode.json` — the MCP servers, skill sources and plugins the deployment installs.
+- `agents/<name>.md` — an OpenCode agent: frontmatter plus its system prompt body.
+- `prompts/<name>.md` — a prompt template, installed as the command `/<name>`.
+- `skills/<id>/SKILL.md` — an OpenCode skill. The directory name is the skill ID.
+- `config/agentic.opencode.json` — a config snippet to **merge**, not to copy.
 
-The invariant: **the agent body is the prompt verbatim.** When the prompt changes, re-sync the agent body.
+There is no deployment script. `INSTALL.md` is the installer, and it is written
+for an agent to execute.
 
-## Agents
+### The pipeline
 
-### Plan Agent
+| # | Stage | Agent | Question it answers |
+|---|---|---|---|
+| 1 | Interrogate → brief → orchestrate | `design` (primary) | What is worth building, and why? |
+| 2 | Plan | `planner` (subagent) | What is the decision-complete plan? |
+| 3 | Review | `reviewer` (subagent) | Is the plan **sound**? |
+| 4 | Verify | `verifier` (subagent) | Is the plan **true**? |
 
-Produces decision-complete execution plans with the five-section contract (Context / Approach / Critical files & anchors / Verification / Assumptions & contingencies), concrete edits, grounded discovery, and no unsolicited padding.
+`design` is the only interactive stage and the only one permitted to launch
+subagents. It hands a grounded plan to the built-in `build` agent, which the
+`/build` command drives. See [Agent Orchestration](#agent-orchestration) for the
+loop and its limits.
 
-After completing the plan, automatically invokes the Reviewer agent to review the plan for flaws.
+Four things worth knowing before you edit anything here:
 
-### Reviewer Agent
-
-Acts as a devil's advocate to identify flaws, edge cases, and missed considerations in plans and code reviews. Runs in a separate context window to avoid carrying forward assumptions.
-
-The Reviewer produces a structured review with:
-- Review Summary
-- Critical Issues
-- Concerns
-- Minor Observations
-- Verdict (APPROVE / REVISE / REJECT)
+- `agents/plan.md` is a 13-line override that hides OpenCode's built-in `plan`
+  agent. It contains no planning instructions.
+- `agents/reviewer.md` and `prompts/reviewer.md` are different files of different
+  lengths. They are **not** kept in sync automatically.
+- `design` and `verifier` exist only as agents; they have no prompt counterpart.
+- `design` is deliberately **not** hidden. The other four are.
 
 ## Skills
 
@@ -46,24 +53,24 @@ A session-end self-improvement skill that reviews everything accomplished in a s
 
 Memory is stored globally at `~/.opencode/memory/`.
 
-The skill is located at `skills/hindsight/SKILL.md` and deployed to `.opencode/skills/hindsight/SKILL.md`.
+The skill is located at `skills/hindsight/SKILL.md`. Installing it copies the whole directory to `~/.config/opencode/skills/hindsight/`.
 
 ### Karpathy Guidelines
 
-Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876). Loaded automatically by the Plan and Reviewer agents at session start. Four principles in priority order:
+Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876). Loaded automatically by all four pipeline agents (`design`, `planner`, `reviewer`, `verifier`) at session start. Four principles in priority order:
 
 1. **Goal-Driven Execution** (highest priority) — Transform tasks into verifiable goals with success criteria; loop until verified.
 2. **Think Before Coding** — State assumptions explicitly; surface tradeoffs; push back when warranted.
 3. **Simplicity First** — Minimum code that solves the problem; nothing speculative.
 4. **Surgical Changes** — Touch only what you must; clean up only your own mess.
 
-The skill is located at `skills/karpathy-guidelines/SKILL.md` and deployed to `.opencode/skills/karpathy-guidelines/SKILL.md`.
+The skill is located at `skills/karpathy-guidelines/SKILL.md`. Installing it copies the whole directory to `~/.config/opencode/skills/karpathy-guidelines/`.
 
 ### Caveman
 
-Ultra-compressed communication mode that cuts output tokens while keeping technical accuracy. Loaded by default for Plan and Reviewer agents. It can also be activated manually via `/caveman`, "caveman mode", "talk like caveman", "be brief", or "less tokens". Four intensity levels: lite, full (default), ultra, and wenyan variants (classical Chinese). Derived from [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman).
+Ultra-compressed communication mode that cuts output tokens while keeping technical accuracy. Loaded by default by all four pipeline agents. It can also be activated manually via `/caveman`, "caveman mode", "talk like caveman", "be brief", or "less tokens". Four intensity levels: lite, full (default), ultra, and wenyan variants (classical Chinese). Derived from [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman).
 
-The skill is located at `skills/caveman/SKILL.md` and deployed to `.opencode/skills/caveman/SKILL.md`.
+The skill is located at `skills/caveman/SKILL.md`. Installing it copies the whole directory to `~/.config/opencode/skills/caveman/`.
 
 ## Persistent Memory
 
@@ -74,7 +81,7 @@ The project maintains global lessons learned from past sessions in `~/.opencode/
 **How it works:**
 - `AGENTS.md` instructs all agents to read `MEMORY.md` at session start
 - `MEMORY.md` is the index listing all lessons
-- Individual lesson files (e.g., `001-deployment-infrastructure.md`) contain the full lesson content
+- Individual lesson files (e.g., `001-install-infrastructure.md`) contain the full lesson content
 - The hindsight skill writes new lessons to this directory
 
 ### Proactive Hindsight Suggestions
@@ -103,7 +110,7 @@ To avoid repeated approval prompts when agents read or update global memory, add
 OpenCode expands the `~` prefix using the current user's home directory. Preserve the home-relative form on Windows; do not copy the Unix `/home/<user>/` example into Windows configuration.
 
 **Current lessons:**
-1. Deployment Infrastructure — Always update deployment scripts when adding new agents or skills
+1. Install Infrastructure — Skills, agents and prompts install by file placement; `INSTALL.md` is the mechanism, and it needs no edit when the count changes
 2. Avoid Hardcoding — Don't hardcode provider-specific values in portable agents
 3. Clarify Requirements — Ask clarifying questions before implementing complex features
 4. Test Integration — Test agent orchestration integration points early and iterate
@@ -177,9 +184,8 @@ agentic/
 ├── docs/
 │   └── AGENTS-PLAN.md        # Pre-task checklist (P1-P8) referenced by AGENTS.md
 ├── config/
-│   └── agentic.opencode.json # MCP servers, skill sources, plugins
-├── deploy.ps1                # PowerShell deployment script
-├── deploy.sh                 # Bash deployment script
+│   └── agentic.opencode.json # Config snippet to MERGE, not copy
+├── INSTALL.md                # The installer — there is no deploy script
 ├── MCP.md                    # MCP server recommendations and install notes
 ├── AGENTS.md                # Project instructions (memory loading, conventions)
 └── README.md
@@ -187,9 +193,10 @@ agentic/
 
 | Path | Purpose |
 |---|---|
+| `INSTALL.md` | **The installer.** Maps every object to its OpenCode v2 destination, and specifies the config merge. |
 | `prompts/build.md` | `/build` — executes a validated plan, runs its `## Verification`. |
-| `prompts/plan-mode.md` | Canonical Plan prompt, deployed as the standalone `/plan-mode` command. |
-| `prompts/reviewer.md` | Canonical Reviewer prompt, deployed as the standalone `/reviewer` command. |
+| `prompts/plan-mode.md` | Canonical Plan prompt, installed as the standalone `/plan-mode` command. |
+| `prompts/reviewer.md` | Canonical Reviewer prompt, installed as the standalone `/reviewer` command. |
 | `agents/design.md` | Pipeline entry point. Primary, read-only. Interrogates, emits a brief, then dispatches planner → reviewer → verifier. |
 | `agents/planner.md` | Subagent. Produces the plan. Cannot dispatch other agents. |
 | `agents/reviewer.md` | Subagent. Judges the plan's soundness. Must APPROVE before the verifier runs. |
@@ -248,97 +255,60 @@ grep -i 'normalization diagnostic' ~/.local/share/opencode/log/opencode.log
 
 A rejected key is reported as `path=$.plugin kind=invalid action="skipped"`.
 
-## Deployment
 
-The deployment scripts install agents, skills, and the AGENTS.md file:
+## Installing
 
-**PowerShell (Windows):**
+There is no deployment script. `INSTALL.md` is the installer: it maps every
+object in this repo to its OpenCode v2 destination, and it is written so an AI
+agent can execute it end to end. Point your agent at it:
 
-```powershell
-# Global (all projects)
-.\deploy.ps1
+> Read `INSTALL.md` and install this.
 
-# Per-project
-.\deploy.ps1 -Project .
-```
+The mapping in short — `INSTALL.md` §1 has the per-project column:
 
-`deploy.ps1` requires **PowerShell 7+** (`pwsh`). Windows PowerShell 5.1 — the
-stock `powershell.exe` — does not support `ConvertFrom-Json -AsHashtable` and
-aborts partway through with `A parameter cannot be found that matches parameter
-name 'AsHashtable'`, after it has already copied the agents, skills and
-commands. Run it as `pwsh -File .\deploy.ps1 ...`, or use `deploy.sh` on
-Unix-like hosts.
+| Object | Global destination |
+|---|---|
+| `agents/<name>.md` | `~/.config/opencode/agents/` |
+| `prompts/<name>.md` | `~/.config/opencode/commands/`, invoked as `/<name>` |
+| `skills/<id>/` | `~/.config/opencode/skills/<id>/` |
+| `AGENTS.md` | `~/.config/opencode/AGENTS.md`, inside a marker pair |
+| `config/agentic.opencode.json` | merged into `~/.config/opencode/opencode.jsonc` |
 
-**Bash (Unix-like):**
+Prefer the global install: the pipeline agents are useful in every project.
 
-```bash
-# Global (all projects)
-./deploy.sh
+### Why the config is merged rather than copied
 
-# Per-project
-./deploy.sh --project .
-```
+OpenCode loads exactly one extra config file, selected by `OPENCODE_CONFIG`.
+Dropping a second `*.opencode.json` into the config directory does nothing — it is
+silently ignored. Everything the snippet declares must be merged into the target's
+own `opencode.json(c)`.
 
-The scripts deploy:
-- **Agents** to `~/.config/opencode/agents/` (global) or `<project>/.opencode/agents/` (per-project)
-- **Skills** to `~/.config/opencode/skills/` (global) or `<project>/.opencode/skills/` (per-project)
-- **Prompts** to `~/.config/opencode/commands/` (global) or `<project>/.opencode/commands/` (per-project), so each prompt becomes a slash command (`prompts/plan-mode.md` → `/plan-mode`)
-- **MCP servers, skill sources and plugins** merged from `config/agentic.opencode.json` into `~/.config/opencode/opencode.jsonc` (global) or `<project>/.opencode/opencode.jsonc` (per-project)
-- **AGENTS.md** to `~/.config/opencode/AGENTS.md` (global) or `<project>/.opencode/AGENTS.md` (per-project)
-
-Skip a section when you only want part of the deployment:
-
-```powershell
-.\deploy.ps1 -NoConfig
-.\deploy.ps1 -NoPrompts
-```
-
-```bash
-./deploy.sh --no-config
-./deploy.sh --no-prompts
-```
+That is the one step a plain file copy cannot do, so `INSTALL.md` §4 spells out the
+merge rules. Back the target up first — rewriting it as JSON drops `//` comments.
+Secrets are never written into config: the GitHub server reads its token from
+`{env:GITHUB_PERSONAL_ACCESS_TOKEN}`.
 
 ### Idempotency
 
-Running a deployment twice produces the same result. This matters because the
-global config directory is shared state that other tools also write to.
+Re-installing produces the same result. This matters because the global config
+directory is shared state that other tools also write to.
 
-- **AGENTS.md** is wrapped in a pair of `agentic:begin` / `agentic:end` HTML
-  comment markers. A repeat run replaces that block in place and leaves every
-  other byte of the file alone. Older versions of these scripts appended
-  unconditionally under a `<!-- Appended from agentic project -->` comment,
-  which duplicated the whole block on every run; that legacy block is migrated
-  into the marked block on the first run of the new scripts.
+- **AGENTS.md** is wrapped in a marker pair. A repeat install replaces that block
+  in place and leaves every other byte of the file alone.
 - **MCP servers** are merged by name. Only the keys defined in
   `config/agentic.opencode.json` are written; every other setting in the target
   config is preserved, including legacy servers declared directly under `mcp`.
 - **`skills` and `plugins`** are merged as ordered unions: your existing entries
-  keep their precedence and new ones are appended. Order matters for both.
-- Object keys are sorted recursively so the written file is byte-stable across
-  runs and reviewable in version control. Arrays keep their order. The previous
-  file is saved as `<config>.bak`.
-
-### Managed config merge
-
-OpenCode loads exactly one extra config file, selected by the `OPENCODE_CONFIG`
-environment variable. Dropping a second `*.opencode.json` file into the global
-config directory does nothing — it is silently ignored. Everything the snippet
-declares therefore has to be merged into the target's own `opencode.json(c)`.
-
-The merge is JSONC-aware: line and block comments are stripped before parsing
-and the file is rewritten as plain JSON. If the target contained comments, the
-script warns you and the original is preserved at `<config>.bak`.
-
-Secrets are never written into the config. The GitHub server reads its token
-from `{env:GITHUB_PERSONAL_ACCESS_TOKEN}`.
+  keep their precedence and new ones are appended. Order matters for both, so
+  never sort them.
 
 ### External checkouts
 
-The deployment ensures the Understand Anything checkout exists at
-`~/.understand-anything/repo` (override with `UA_DIR` / `UA_REPO_URL`), because
-the managed `skills` entry points into it. **An existing checkout is never
-updated** — a deployment must not silently move your dependency versions. Update
-it yourself when you want to move:
+The `skills` entry in `config/agentic.opencode.json` points into an Understand
+Anything checkout, so that checkout has to exist before those nine skills resolve.
+`INSTALL.md` §2 clones it; skip that and drop the entry instead. **Never update an
+existing checkout as part of an install** — an install must not silently move your
+dependency versions. Update it yourself when you want to move:
 
 ```sh
 git -C ~/.understand-anything/repo pull --ff-only
@@ -385,152 +355,33 @@ npm install superpowers@git+https://github.com/obra/superpowers.git --prefix "$H
 then use `C:\Users\<you>\.config\opencode\node_modules\superpowers` as the
 `plugins` entry.
 
-### AGENTS.md Deployment Behavior
+### AGENTS.md placement
 
-The deployment scripts handle AGENTS.md intelligently:
+The global `AGENTS.md` is shared state: other tools and other machines write to
+it, so the block this repo owns is wrapped in a marker pair and **replaced in
+place** on a re-install, never appended a second time.
 
-- **If AGENTS.md exists at the target location:** The script creates a backup (`AGENTS.md.bak`), then replaces its own marked block in place. This preserves global instructions while refreshing project-specific ones.
+For a per-project install the file goes at `<project>/AGENTS.md`. OpenCode
+discovers instruction files from the workspace up toward your home directory,
+stopping at the project root, so `<project>/.opencode/AGENTS.md` would only load
+if an agent happened to read inside `.opencode/` — not what you want for
+repository-wide guidance.
 
-- **If AGENTS.md does not exist:** The script writes AGENTS.md containing the marked block.
+`INSTALL.md` §5 has the exact procedure, including the legacy
+`<!-- Appended from agentic project -->` block that older installs left behind.
 
-This ensures that global AGENTS.md files (with instructions for all projects) are not overwritten by project-specific deployments.
+### Verify
 
-### Manual deployment
-
-**Global (all projects):**
-
-```sh
-# Agents
-mkdir -p ~/.config/opencode/agents
-cp agents/design.md ~/.config/opencode/agents/design.md
-cp agents/planner.md ~/.config/opencode/agents/planner.md
-cp agents/reviewer.md ~/.config/opencode/agents/reviewer.md
-cp agents/verifier.md ~/.config/opencode/agents/verifier.md
-cp agents/plan.md ~/.config/opencode/agents/plan.md
-
-# Commands (each prompt/*.md becomes /<name>)
-mkdir -p ~/.config/opencode/commands
-cp prompts/build.md ~/.config/opencode/commands/build.md
-cp prompts/plan-mode.md ~/.config/opencode/commands/plan-mode.md
-cp prompts/reviewer.md ~/.config/opencode/commands/reviewer.md
-
-# Skills
-mkdir -p ~/.config/opencode/skills/hindsight
-cp skills/hindsight/SKILL.md ~/.config/opencode/skills/hindsight/SKILL.md
-mkdir -p ~/.config/opencode/skills/karpathy-guidelines
-cp skills/karpathy-guidelines/SKILL.md ~/.config/opencode/skills/karpathy-guidelines/SKILL.md
-mkdir -p ~/.config/opencode/skills/caveman
-cp skills/caveman/SKILL.md ~/.config/opencode/skills/caveman/SKILL.md
-
-# AGENTS.md
-cp AGENTS.md ~/.config/opencode/AGENTS.md
-```
-
-PowerShell:
-
-```powershell
-# Agents
-New-Item -ItemType Directory -Force ~/.config/opencode/agents | Out-Null
-Copy-Item agents\design.md ~/.config\opencode\agents\design.md
-Copy-Item agents\planner.md ~/.config\opencode\agents\planner.md
-Copy-Item agents\reviewer.md ~/.config\opencode\agents\reviewer.md
-Copy-Item agents\verifier.md ~/.config\opencode\agents\verifier.md
-Copy-Item agents\plan.md ~/.config\opencode\agents\plan.md
-
-# Commands (each prompts\*.md becomes /<name>)
-New-Item -ItemType Directory -Force ~/.config/opencode/commands | Out-Null
-Copy-Item prompts\build.md ~/.config\opencode\commands\build.md
-Copy-Item prompts\plan-mode.md ~/.config\opencode\commands\plan-mode.md
-Copy-Item prompts\reviewer.md ~/.config\opencode\commands\reviewer.md
-
-# Skills
-New-Item -ItemType Directory -Force ~/.config/opencode/skills/hindsight | Out-Null
-Copy-Item skills\hindsight\SKILL.md ~/.config\opencode\skills\hindsight\SKILL.md
-New-Item -ItemType Directory -Force ~/.config/opencode/skills/karpathy-guidelines | Out-Null
-Copy-Item skills\karpathy-guidelines\SKILL.md ~/.config\opencode\skills\karpathy-guidelines\SKILL.md
-New-Item -ItemType Directory -Force ~/.config/opencode/skills/caveman | Out-Null
-Copy-Item skills\caveman\SKILL.md ~/.config\opencode\skills\caveman\SKILL.md
-
-# AGENTS.md
-Copy-Item AGENTS.md ~/.config\opencode\AGENTS.md
-```
-
-**Per-project:**
+See `INSTALL.md` §6. In short:
 
 ```sh
-# Agents
-mkdir -p <project>/.opencode/agents
-cp agents/design.md <project>/.opencode/agents/design.md
-cp agents/planner.md <project>/.opencode/agents/planner.md
-cp agents/reviewer.md <project>/.opencode/agents/reviewer.md
-cp agents/verifier.md <project>/.opencode/agents/verifier.md
-cp agents/plan.md <project>/.opencode/agents/plan.md
-
-# Commands (each prompt/*.md becomes /<name>)
-mkdir -p <project>/.opencode/commands
-cp prompts/build.md <project>/.opencode/commands/build.md
-cp prompts/plan-mode.md <project>/.opencode/commands/plan-mode.md
-cp prompts/reviewer.md <project>/.opencode/commands/reviewer.md
-
-# Skills
-mkdir -p <project>/.opencode/skills/hindsight
-cp skills/hindsight/SKILL.md <project>/.opencode/skills/hindsight/SKILL.md
-mkdir -p <project>/.opencode/skills/karpathy-guidelines
-cp skills/karpathy-guidelines/SKILL.md <project>/.opencode/skills/karpathy-guidelines/SKILL.md
-mkdir -p <project>/.opencode/skills/caveman
-cp skills/caveman/SKILL.md <project>/.opencode/skills/caveman/SKILL.md
-
-# AGENTS.md
-cp AGENTS.md <project>/.opencode/AGENTS.md
+opencode debug config    # the merged config, as OpenCode actually loaded it
+opencode debug agents    # agent IDs, modes and hidden flags
 ```
 
-PowerShell:
-
-```powershell
-# Agents
-New-Item -ItemType Directory -Force <project>/.opencode/agents | Out-Null
-Copy-Item agents\design.md <project>/.opencode\agents\design.md
-Copy-Item agents\planner.md <project>/.opencode\agents\planner.md
-Copy-Item agents\reviewer.md <project>/.opencode\agents\reviewer.md
-Copy-Item agents\verifier.md <project>/.opencode\agents\verifier.md
-Copy-Item agents\plan.md <project>/.opencode\agents\plan.md
-
-# Commands (each prompts\*.md becomes /<name>)
-New-Item -ItemType Directory -Force <project>/.opencode/commands | Out-Null
-Copy-Item prompts\build.md <project>/.opencode\commands\build.md
-Copy-Item prompts\plan-mode.md <project>/.opencode\commands\plan-mode.md
-Copy-Item prompts\reviewer.md <project>/.opencode\commands\reviewer.md
-
-# Skills
-New-Item -ItemType Directory -Force <project>/.opencode/skills/hindsight | Out-Null
-Copy-Item skills\hindsight\SKILL.md <project>/.opencode\skills\hindsight\SKILL.md
-New-Item -ItemType Directory -Force <project>/.opencode/skills/karpathy-guidelines | Out-Null
-Copy-Item skills\karpathy-guidelines\SKILL.md <project>/.opencode\skills\karpathy-guidelines\SKILL.md
-New-Item -ItemType Directory -Force <project>/.opencode/skills/caveman | Out-Null
-Copy-Item skills\caveman\SKILL.md <project>/.opencode\skills\caveman\SKILL.md
-
-# AGENTS.md
-Copy-Item AGENTS.md <project>/.opencode\AGENTS.md
-```
-
-## Install & verify
-
-1. **Copy the agent and skill files** to the expected location (see above).
-
-2. **Verify agent registration:**
-   ```sh
-   opencode debug agents
-   ```
-   Expected entries: `design` (`primary`, visible — it is the entry point),
-   plus `planner`, `reviewer` and `verifier` as `subagent`. Those three are
-   `"hidden": true`, and so is `plan`: the built-in `plan` agent is hidden by
-   the override in `agents/plan.md`.
-
-   `hidden` affects listings only, not launching: `design` still dispatches
-   `planner`, `reviewer` and `verifier` by ID.
-
-   Commands are verified with `/` in the TUI: `/build`, `/plan-mode`,
-   `/reviewer`.
+`design` must appear as `primary` and **not** hidden; `planner`, `reviewer` and
+`verifier` are `subagent` and hidden. If `debug agents` shows `plan` as visible,
+the install predates the design pipeline.
 
 ## Usage
 
@@ -559,7 +410,7 @@ command and the real output, not a summary that it passed.
 
 ### Standalone commands
 
-`/plan-mode` and `/reviewer` remain deployed as commands for one-off use outside
+`/plan-mode` and `/reviewer` remain installed as commands for one-off use outside
 the pipeline. `/plan-mode` is the pre-pipeline planner prompt.
 
 ### Hindsight Skill
@@ -596,7 +447,7 @@ order matters: broad rule first, exceptions after it.
 
 ## Keeping prompts and agents in sync
 
-`prompts/<name>.md` deploys to `/<name>` as a command; `agents/<name>.md` is the
+`prompts/<name>.md` installs to `/<name>` as a command; `agents/<name>.md` is the
 agent. They are separate files with separate bodies, and they have already
 drifted — `prompts/reviewer.md` (200 lines) is shorter than `agents/reviewer.md`
 (218 lines). Editing one does not update the other.
