@@ -168,6 +168,7 @@ agentic/
 | `skills/karpathy-guidelines/SKILL.md` | Karpathy guidelines skill for planning, writing, and reviewing code. |
 | `skills/grill-me/SKILL.md` | Relentless interview to sharpen a plan or design. |
 | `skills/caveman/SKILL.md` | Caveman skill for compressed communication style. |
+| `skills/llm-council/SKILL.md` | LLM Council skill. The CLI itself lives in the `homelab` repo, `ai/council/`. |
 | `skills/stop-slop` | Git submodule for `hardikpandya/stop-slop`. |
 | `config/agentic.opencode.json` | Managed config merged into the target Opencode config. |
 | `AGENTS.md` | Project instructions. Instructs agents to load persistent memory at session start. |
