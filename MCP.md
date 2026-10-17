@@ -146,9 +146,7 @@ pip install "graphifyy[mcp]"
 { "type": "local", "command": ["python", "-m", "graphify.serve"] }
 ```
 
-The server serves a prebuilt `graphify-out/graph.json` from the working
-directory, so it only connects in a project where `graphify .` has already been
-run. It is therefore registered `disabled: true` by default.
+The server serves a prebuilt `graphify-out/graph.json` from the working directory, so it only connects in a project where `graphify .` has already been run. It is therefore registered `disabled: true` by default.
 
 **Verdict:** Most comprehensive code graph solution. Install if you need multi-language, multi-format code intelligence.
 
@@ -171,9 +169,7 @@ npm install -g @colbymchenry/codegraph
 codegraph serve --mcp
 ```
 
-A bare `npx -y @colbymchenry/codegraph` invocation does **not** start an MCP
-server; it prints CLI help and hangs, which Opencode reports as a 30s startup
-timeout. The `serve --mcp` subcommand is required.
+A bare `npx -y @colbymchenry/codegraph` invocation does **not** start an MCP server; it prints CLI help and hangs, which Opencode reports as a 30s startup timeout. The `serve --mcp` subcommand is required.
 
 **Verdict:** Strong alternative if you want function-level graph with proven token savings.
 
@@ -210,8 +206,7 @@ timeout. The `serve --mcp` subcommand is required.
 npx -y @zilliz/claude-context-mcp
 ```
 
-Requires a Zilliz Cloud account for the embedding backend, so it is registered
-`disabled: true` until credentials exist.
+Requires a Zilliz Cloud account for the embedding backend, so it is registered `disabled: true` until credentials exist.
 
 **Verdict:** Install if you prefer semantic search over graph queries.
 
