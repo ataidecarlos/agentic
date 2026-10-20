@@ -1,3 +1,7 @@
+---
+description: Implement a validated plan from the design pipeline
+---
+
 # Build — consume a validated plan
 
 Implement the validated plan from this conversation.
