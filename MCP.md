@@ -52,6 +52,28 @@ npx -y @playwright/mcp
 
 ---
 
+### Sequential Thinking
+**What it does:** Guided multi-step reasoning. The agent writes a thought, revises it when its understanding changes, branches into alternative lines of reasoning, and adjusts the total step count dynamically as the problem resolves.
+
+**Why it matters:** Gives an agent an explicit reasoning scaffold instead of one-shot answering. It decomposes ill-scoped problems, reconsiders premises that turn out to be wrong, and filters irrelevant context out of a long transcript. It ships as a single tool (`sequential_thinking`), so it costs one function call rather than a whole workflow.
+
+**Stats:** 143k+ weekly npm downloads, official Model Context Protocol reference server
+
+**Install:**
+```bash
+npx -y @modelcontextprotocol/server-sequential-thinking
+```
+
+**Opencode entry:**
+```jsonc
+{ "type": "local", "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-sequential-thinking"] }
+```
+Requires Node.js 24+. On Windows, wrap `npx` in `cmd /c` — spawning the `.cmd` shim directly fails.
+
+**Verdict:** Cheap reasoning scaffold with no API key. Install alongside the other Tier 1 servers.
+
+---
+
 ## Tier 2: High Value for Specific Workflows
 
 ### Firecrawl MCP
@@ -227,6 +249,7 @@ Requires a Zilliz Cloud account for the embedding backend, so it is registered `
 1. Context7 (docs)
 2. GitHub MCP (repos)
 3. Playwright MCP (browser)
+4. Sequential Thinking (reasoning)
 
 **Add based on workflow:**
 - Web scraping/search → Firecrawl or Exa
