@@ -17,14 +17,6 @@
         "type": "local",
         "command": ["npx", "-y", "@playwright/mcp"]
       },
-      "codegraph": {
-        "type": "local",
-        "command": ["codegraph", "serve", "--mcp"],
-        "codemode": false,
-        "timeout": {
-          "startup": 120000
-        }
-      },
       "graphify": {
         "type": "local",
         "command": ["python", "-m", "graphify.serve"],
